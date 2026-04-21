@@ -383,7 +383,7 @@ const AppContent: React.FC = () => {
         )}
 
         <main className={mainClassName}>
-            <Routes>
+            <Routes location={location} key={`${location.pathname}${location.search}`}>
               <Route path="/" element={isLoggedIn ? <Navigate to={homeRoute} replace /> : <LandingPage />} />
               <Route path="/about" element={<AboutPage />} />
               <Route

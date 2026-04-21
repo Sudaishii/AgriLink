@@ -39,6 +39,15 @@ const farmerNav = [
   { label: 'Profile', icon: User, to: '/profile' },
 ];
 
+const buyerNav = [
+  { label: 'Marketplace', icon: Store, to: '/buyer/marketplace' },
+  { label: 'My Cart', icon: ShoppingCart, to: '/buyer/cart' },
+  { label: 'Maps', icon: Map, to: '/buyer/map' },
+  { label: 'Messages', icon: MessageSquare, to: '/messages' },
+  { label: 'Notifications', icon: Bell, to: '/notifications' },
+  { label: 'Profile', icon: User, to: '/profile' },
+];
+
 const adminNav = [
   { label: 'Dashboard', icon: LayoutDashboard, to: '/admin/dashboard' },
   { label: 'Marketplace', icon: Store, to: '/buyer/marketplace' },
@@ -72,8 +81,9 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, firstName, lastName, profil
   const isAdmin = userType.toLowerCase() === 'admin';
   const isBrgy = userType.toLowerCase() === 'brgy_official';
 
-  let navItems = adminNav;
+  let navItems = buyerNav;
   if (isFarmer) navItems = farmerNav;
+  if (isAdmin) navItems = adminNav;
   if (isBrgy) navItems = brgyNav;
 
   useEffect(() => {
@@ -127,7 +137,13 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, firstName, lastName, profil
   const roleLabel = getRoleLabel();
   const roleColor = getRoleColor();
   const roleBg = getRoleBg();
-  const homeRoute = isFarmer ? '/farmer/dashboard' : isBrgy ? '/brgy/dashboard' : '/admin/dashboard';
+  const homeRoute = isFarmer
+    ? '/farmer/dashboard'
+    : isBrgy
+      ? '/brgy/dashboard'
+      : isAdmin
+        ? '/admin/dashboard'
+        : '/buyer/marketplace';
   const displayName = [firstName, lastName].filter(Boolean).join(' ').trim() || 'Profile not set';
   const displayInitials =
     [firstName?.[0], lastName?.[0]].filter(Boolean).join('') ||

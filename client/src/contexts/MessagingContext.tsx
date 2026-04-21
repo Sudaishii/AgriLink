@@ -93,7 +93,13 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
 
   const mergeConversations = useCallback((serverRows: Conversation[], existingRows: Conversation[]) => {
     const seen = new Set(serverRows.map((c) => c.participantId));
-    const extras = existingRows.filter((c) => !seen.has(c.participantId));
+    const extras = existingRows.filter((c) => {
+      if (seen.has(c.participantId)) return false;
+      const hasUnread = Number(c.unreadCount || 0) > 0;
+      const hasMessage = String(c.lastMessage || '').trim().length > 0;
+      // Drop placeholder/empty local conversations that were never actually messaged.
+      return hasUnread || hasMessage;
+    });
     return [...serverRows, ...extras];
   }, []);
 

@@ -539,47 +539,73 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
     });
   }, [activeOrders, orderStatusFilter, orderSort]);
 
-  const buildPersonalPayload = () => ({
+  const buildPersonalPayload = () => {
+    const normalizedPhone = String(profile.phone || '').replace(/\D/g, '').slice(0, 11);
+    const fixedCity = 'Minglanilla';
+    const fixedProvince = 'Cebu';
+    const fixedZipCode = '6046';
+    const homeCity = isFarmer ? fixedCity : profile.city;
+    const homeProvince = isFarmer ? fixedProvince : profile.province;
+    const homeZipCode = isFarmer ? fixedZipCode : profile.zipCode;
+    const farmCity = profile.farmAddressSameAsHome ? homeCity : (isFarmer ? fixedCity : profile.farmCity);
+    const farmProvince = profile.farmAddressSameAsHome ? homeProvince : (isFarmer ? fixedProvince : profile.farmProvince);
+    const farmZipCode = profile.farmAddressSameAsHome ? homeZipCode : (isFarmer ? fixedZipCode : profile.farmZipCode);
+
+    return {
     first_name: profile.firstName,
     last_name: profile.lastName,
-    phone: profile.phone,
+    phone: normalizedPhone,
     address: profile.address,
-    city: 'Minglanilla',
-    province: 'Cebu',
-    zip_code: '6046',
+    city: homeCity,
+    province: homeProvince,
+    zip_code: homeZipCode,
     latitude: profile.latitude,
     longitude: profile.longitude,
     bio: profile.bio,
     // Include farm info too so it doesn't get wiped if isSameAsHome is true
     farm_name: profile.farmName,
     farm_address: profile.farmAddressSameAsHome ? profile.address : profile.farmAddress,
-    farm_city: 'Minglanilla',
-    farm_province: 'Cebu',
-    farm_zip_code: '6046',
+    farm_city: farmCity,
+    farm_province: farmProvince,
+    farm_zip_code: farmZipCode,
     farm_latitude: profile.farmAddressSameAsHome ? profile.latitude : profile.farmLatitude,
     farm_longitude: profile.farmAddressSameAsHome ? profile.longitude : profile.farmLongitude,
     farm_address_same_as_home: profile.farmAddressSameAsHome,
-  });
+    };
+  };
 
-  const buildFarmPayload = () => ({
+  const buildFarmPayload = () => {
+    const normalizedPhone = String(profile.phone || '').replace(/\D/g, '').slice(0, 11);
+    const fixedCity = 'Minglanilla';
+    const fixedProvince = 'Cebu';
+    const fixedZipCode = '6046';
+    const homeCity = isFarmer ? fixedCity : profile.city;
+    const homeProvince = isFarmer ? fixedProvince : profile.province;
+    const homeZipCode = isFarmer ? fixedZipCode : profile.zipCode;
+    const farmCity = isFarmer ? fixedCity : profile.farmCity;
+    const farmProvince = isFarmer ? fixedProvince : profile.farmProvince;
+    const farmZipCode = isFarmer ? fixedZipCode : profile.farmZipCode;
+
+    return {
     first_name: profile.firstName,
     last_name: profile.lastName,
-    phone: profile.phone,
+    phone: normalizedPhone,
     address: profile.address, // Include home address so same_as_home logic works on backend
-    city: 'Minglanilla',
-    province: 'Cebu',
-    zip_code: '6046',
+    city: homeCity,
+    province: homeProvince,
+    zip_code: homeZipCode,
     latitude: profile.latitude,
     longitude: profile.longitude,
     farm_name: profile.farmName,
     farm_address: profile.farmAddress,
-    farm_city: 'Minglanilla',
-    farm_province: 'Cebu',
-    farm_zip_code: '6046',
+    farm_city: farmCity,
+    farm_province: farmProvince,
+    farm_zip_code: farmZipCode,
     farm_latitude: profile.farmLatitude,
     farm_longitude: profile.farmLongitude,
     farm_address_same_as_home: profile.farmAddressSameAsHome,
-  });
+    };
+  };
 
   const buildPersonalSignature = (source: Partial<UserProfile>) =>
     JSON.stringify({
@@ -619,6 +645,13 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
     if (!hasPendingImage && !hasProfileChanges) {
       toast.info('Nothing to update.');
       return;
+    }
+    if (!isBrgy) {
+      const normalizedPhone = String(profile.phone || '').replace(/\D/g, '');
+      if (normalizedPhone.length !== 11) {
+        toast.error('Mobile number must be exactly 11 digits.');
+        return;
+      }
     }
 
     setSaveLoading(true);
@@ -1266,7 +1299,18 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
                         <span className="text-xs font-medium text-slate-500">Phone</span>
                         <div className="relative">
                           <Phone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                          <input className={`${inputClass} pl-9`} placeholder="09xx xxx xxxx" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
+                          <input
+                            className={`${inputClass} pl-9`}
+                            placeholder="09xx xxx xxxx"
+                            value={profile.phone}
+                            maxLength={11}
+                            onChange={(e) =>
+                              setProfile({
+                                ...profile,
+                                phone: e.target.value.replace(/\D/g, '').slice(0, 11),
+                              })
+                            }
+                          />
                         </div>
                       </label>
 
@@ -1276,15 +1320,36 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
                       </label>
                       <label className="space-y-1">
                         <span className="text-xs font-medium text-slate-500">City</span>
-                        <input className={inputClass} value={profile.city || ''} onChange={(e) => setProfile({ ...profile, city: e.target.value })} placeholder="e.g. Minglanilla" />
+                        <input
+                          className={isFarmer ? `${inputClass} bg-slate-100 text-slate-500 cursor-not-allowed` : inputClass}
+                          value={isFarmer ? 'Minglanilla' : profile.city || ''}
+                          readOnly={isFarmer}
+                          disabled={isFarmer}
+                          onChange={(e) => !isFarmer && setProfile({ ...profile, city: e.target.value })}
+                          placeholder={isFarmer ? 'Minglanilla' : 'e.g. Minglanilla'}
+                        />
                       </label>
                       <label className="space-y-1">
                         <span className="text-xs font-medium text-slate-500">Province</span>
-                        <input className={inputClass} value={profile.province || ''} onChange={(e) => setProfile({ ...profile, province: e.target.value })} placeholder="e.g. Cebu" />
+                        <input
+                          className={isFarmer ? `${inputClass} bg-slate-100 text-slate-500 cursor-not-allowed` : inputClass}
+                          value={isFarmer ? 'Cebu' : profile.province || ''}
+                          readOnly={isFarmer}
+                          disabled={isFarmer}
+                          onChange={(e) => !isFarmer && setProfile({ ...profile, province: e.target.value })}
+                          placeholder={isFarmer ? 'Cebu' : 'e.g. Cebu'}
+                        />
                       </label>
                       <label className="space-y-1 md:max-w-[240px]">
                         <span className="text-xs font-medium text-slate-500">ZIP Code</span>
-                        <input className={inputClass} value={profile.zipCode || ''} onChange={(e) => setProfile({ ...profile, zipCode: e.target.value })} placeholder="e.g. 6046" />
+                        <input
+                          className={isFarmer ? `${inputClass} bg-slate-100 text-slate-500 cursor-not-allowed` : inputClass}
+                          value={isFarmer ? '6046' : profile.zipCode || ''}
+                          readOnly={isFarmer}
+                          disabled={isFarmer}
+                          onChange={(e) => !isFarmer && setProfile({ ...profile, zipCode: e.target.value })}
+                          placeholder={isFarmer ? '6046' : 'e.g. 6046'}
+                        />
                       </label>
 
                       <label className="space-y-1 md:col-span-2">
@@ -1366,7 +1431,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
                 <input className={inputClass} type="password" placeholder="Current password" value={passwordData.currentPassword} onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })} />
                 <input className={inputClass} type="password" placeholder="New password" value={passwordData.newPassword} onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })} />
                 <input className={inputClass} type="password" placeholder="Confirm new password" value={passwordData.confirmPassword} onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })} />
-                <button onClick={handleUpdatePassword} disabled={passwordLoading} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60">
+                <button onClick={handleUpdatePassword} disabled={passwordLoading} className="rounded-xl bg-[#5ba409] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4d8f08] disabled:opacity-60">
                   {passwordLoading ? 'Updating...' : 'Update Password'}
                 </button>
               </section>
@@ -1814,57 +1879,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
                         onChange={(next) => setAppSettings((prev) => ({ ...prev, compactOrders: next }))}
                         ariaLabel="Compact order view toggle"
                       />
-                    </div>
-                  </div>
-
-                  {/* Security Section */}
-                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <div className="mb-4 flex items-center gap-3 text-slate-900">
-                      <Lock size={18} className="text-emerald-600" />
-                      <h3 className="text-sm font-bold uppercase tracking-wider">Security & Privacy</h3>
-                    </div>
-                    
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Current Password</span>
-                        <input
-                          type="password"
-                          className={inputClass}
-                          placeholder="••••••••"
-                          value={passwordData.currentPassword}
-                          onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">New Password</span>
-                        <input
-                          type="password"
-                          className={inputClass}
-                          placeholder="••••••••"
-                          value={passwordData.newPassword}
-                          onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Confirm New</span>
-                        <input
-                          type="password"
-                          className={inputClass}
-                          placeholder="••••••••"
-                          value={passwordData.confirmPassword}
-                          onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="mt-4 flex justify-end">
-                      <button
-                        onClick={handleUpdatePassword}
-                        disabled={passwordLoading}
-                        className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-black transition-all active:scale-95 disabled:opacity-50"
-                      >
-                        {passwordLoading ? 'Updating...' : 'Change Password'}
-                      </button>
                     </div>
                   </div>
 

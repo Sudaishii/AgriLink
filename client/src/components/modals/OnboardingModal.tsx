@@ -17,6 +17,63 @@ import { useToast } from '../ui/Toast';
 import { API_BASE_URL } from '../../api/apiConfig';
 
 const mapStyle = 'mapbox://styles/mapbox/streets-v11';
+const CEBU_PROVINCE = 'Cebu';
+const CEBU_MUNICIPALITY_COORDS: Record<string, { latitude: number; longitude: number }> = {
+  alcantara: { latitude: 9.9773, longitude: 123.4099 },
+  alcoy: { latitude: 9.7248, longitude: 123.4891 },
+  alegria: { latitude: 9.7369, longitude: 123.3390 },
+  aloguinsan: { latitude: 10.2207, longitude: 123.5488 },
+  argao: { latitude: 9.8794, longitude: 123.6023 },
+  asturias: { latitude: 10.5749, longitude: 123.7206 },
+  badian: { latitude: 9.8696, longitude: 123.3955 },
+  balamban: { latitude: 10.5030, longitude: 123.7156 },
+  bantayan: { latitude: 11.1714, longitude: 123.7229 },
+  barili: { latitude: 10.1151, longitude: 123.5103 },
+  boljoon: { latitude: 9.6290, longitude: 123.4769 },
+  carcar: { latitude: 10.1068, longitude: 123.6405 },
+  cebu: { latitude: 10.3157, longitude: 123.8854 },
+  cityofcebu: { latitude: 10.3157, longitude: 123.8854 },
+  'cebu city': { latitude: 10.3157, longitude: 123.8854 },
+  compostela: { latitude: 10.4550, longitude: 124.0106 },
+  consolacion: { latitude: 10.3713, longitude: 123.9552 },
+  cordova: { latitude: 10.2518, longitude: 123.9497 },
+  dalaguete: { latitude: 9.7620, longitude: 123.5346 },
+  danao: { latitude: 10.5208, longitude: 124.0273 },
+  'danao city': { latitude: 10.5208, longitude: 124.0273 },
+  dumanjug: { latitude: 10.0560, longitude: 123.4361 },
+  gato: { latitude: 10.9999, longitude: 123.7000 },
+  liloan: { latitude: 10.3990, longitude: 123.9997 },
+  madredejos: { latitude: 11.0590, longitude: 123.7560 },
+  malabuyoc: { latitude: 9.6528, longitude: 123.3252 },
+  mandaue: { latitude: 10.3231, longitude: 123.9411 },
+  'mandaue city': { latitude: 10.3231, longitude: 123.9411 },
+  medellin: { latitude: 11.1286, longitude: 124.0061 },
+  minglanilla: { latitude: 10.2442, longitude: 123.7965 },
+  moalboal: { latitude: 9.9439, longitude: 123.3990 },
+  naga: { latitude: 10.2098, longitude: 123.7586 },
+  'naga city': { latitude: 10.2098, longitude: 123.7586 },
+  oslob: { latitude: 9.5208, longitude: 123.4318 },
+  pilar: { latitude: 10.9838, longitude: 124.0013 },
+  pinamungajan: { latitude: 10.2700, longitude: 123.5835 },
+  poro: { latitude: 10.6296, longitude: 124.4053 },
+  ronda: { latitude: 9.9980, longitude: 123.4017 },
+  samar: { latitude: 10.7264, longitude: 124.0040 },
+  'san fernando': { latitude: 10.1622, longitude: 123.7070 },
+  'san francisco': { latitude: 10.6465, longitude: 124.3818 },
+  'san remigio': { latitude: 11.0848, longitude: 123.9398 },
+  'santa fe': { latitude: 11.1688, longitude: 123.8051 },
+  santander: { latitude: 9.4272, longitude: 123.3332 },
+  sibonga: { latitude: 10.0282, longitude: 123.6164 },
+  sogod: { latitude: 10.9800, longitude: 123.9952 },
+  tabogon: { latitude: 10.9368, longitude: 124.0352 },
+  tabuelan: { latitude: 10.8201, longitude: 123.8681 },
+  talisay: { latitude: 10.2450, longitude: 123.8493 },
+  'talisay city': { latitude: 10.2450, longitude: 123.8493 },
+  toledo: { latitude: 10.3771, longitude: 123.6380 },
+  'toledo city': { latitude: 10.3771, longitude: 123.6380 },
+  tuburan: { latitude: 10.7260, longitude: 123.8259 },
+  tudela: { latitude: 10.6114, longitude: 124.4736 },
+};
 
 interface OnboardingModalProps {
   isOpen: boolean;
@@ -32,21 +89,24 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const isFarmer = userType.toLowerCase() === 'farmer';
+  const defaultCity = isFarmer ? 'Minglanilla' : '';
+  const defaultProvince = CEBU_PROVINCE;
+  const defaultZipCode = isFarmer ? '6046' : '';
 
   const [formData, setFormData] = useState({
     phone: '',
     address: '', // This will store Barangay/Landmark
-    city: 'Minglanilla',
-    province: 'Cebu',
-    zip_code: '6046',
+    city: defaultCity,
+    province: defaultProvince,
+    zip_code: defaultZipCode,
     latitude: 10.245,
     longitude: 123.792,
     interests: [] as string[],
     // Farm fields
     farm_address: '',
-    farm_city: 'Minglanilla',
-    farm_province: 'Cebu',
-    farm_zip_code: '6046',
+    farm_city: defaultCity,
+    farm_province: defaultProvince,
+    farm_zip_code: defaultZipCode,
     farm_latitude: 10.245,
     farm_longitude: 123.792,
     farm_address_same_as_home: true
@@ -64,10 +124,33 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
     zoom: 13
   });
 
-  const handleNext = () => setStep(prev => prev + 1);
+  const handleNext = () => {
+    if (step === 2) {
+      const digitsOnlyPhone = formData.phone.replace(/\D/g, '');
+      if (digitsOnlyPhone.length !== 11) {
+        toast.error('Mobile number must be exactly 11 digits.');
+        return;
+      }
+      if (!formData.zip_code.trim()) {
+        toast.error('ZIP code is required.');
+        return;
+      }
+      if (!formData.city.trim()) {
+        toast.error('City / Municipality is required.');
+        return;
+      }
+    }
+    setStep(prev => prev + 1);
+  };
   const handleBack = () => setStep(prev => prev - 1);
 
   const handleSubmit = async () => {
+    const digitsOnlyPhone = formData.phone.replace(/\D/g, '');
+    if (digitsOnlyPhone.length !== 11) {
+      toast.error('Mobile number must be exactly 11 digits.');
+      return;
+    }
+
     setLoading(true);
     try {
       const token = localStorage.getItem('agrilink_token');
@@ -84,17 +167,17 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          phone: formData.phone,
+          phone: digitsOnlyPhone,
           address: formData.address,
           city: formData.city,
-          province: formData.province,
+          province: CEBU_PROVINCE,
           zip_code: formData.zip_code,
           latitude: formData.latitude,
           longitude: formData.longitude,
           // Farm fields
           farm_address: formData.farm_address_same_as_home ? formData.address : formData.farm_address,
           farm_city: formData.farm_city,
-          farm_province: formData.farm_province,
+          farm_province: CEBU_PROVINCE,
           farm_zip_code: formData.farm_zip_code,
           farm_latitude: formData.farm_address_same_as_home ? formData.latitude : formData.farm_latitude,
           farm_longitude: formData.farm_address_same_as_home ? formData.longitude : formData.farm_longitude,
@@ -121,6 +204,63 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
   };
 
   // 🚜 Auto-Sync coordinates if same as home
+  useEffect(() => {
+    if (formData.province !== CEBU_PROVINCE || formData.farm_province !== CEBU_PROVINCE) {
+      setFormData(prev => ({
+        ...prev,
+        province: CEBU_PROVINCE,
+        farm_province: CEBU_PROVINCE
+      }));
+    }
+  }, [formData.province, formData.farm_province]);
+
+  // Re-center home pin map based on entered city/municipality
+  useEffect(() => {
+    const rawCity = formData.city.trim().toLowerCase();
+    if (!rawCity) return;
+    const cityKey = rawCity.replace(/\s+/g, '');
+    const localMatch = CEBU_MUNICIPALITY_COORDS[rawCity] || CEBU_MUNICIPALITY_COORDS[cityKey];
+
+    if (localMatch) {
+      setViewState(prev => ({ ...prev, latitude: localMatch.latitude, longitude: localMatch.longitude, zoom: 13 }));
+      setFormData(prev => ({ ...prev, latitude: localMatch.latitude, longitude: localMatch.longitude }));
+      return;
+    }
+
+    const token = import.meta.env.VITE_MAPBOX_TOKEN;
+    if (!token) return;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    const loadMunicipalityCenter = async () => {
+      try {
+        const query = encodeURIComponent(`${formData.city}, Cebu, Philippines`);
+        const response = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?limit=1&access_token=${token}`,
+          { signal: controller.signal }
+        );
+        if (!response.ok) return;
+        const data = await response.json();
+        const [lng, lat] = data?.features?.[0]?.center || [];
+        if (typeof lat === 'number' && typeof lng === 'number') {
+          setViewState(prev => ({ ...prev, latitude: lat, longitude: lng, zoom: 13 }));
+          setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }));
+        }
+      } catch {
+        // fallback: keep current center
+      } finally {
+        clearTimeout(timeout);
+      }
+    };
+
+    void loadMunicipalityCenter();
+    return () => {
+      controller.abort();
+      clearTimeout(timeout);
+    };
+  }, [formData.city]);
+
   useEffect(() => {
     if (formData.farm_address_same_as_home) {
       setFormData(prev => ({
@@ -228,7 +368,11 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
                       placeholder="09XX XXX XXXX"
                       className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-transparent focus:border-[#5ba409] rounded-2xl outline-none font-bold transition-all"
                       value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      maxLength={11}
+                      onChange={(e) => {
+                        const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 11);
+                        setFormData({ ...formData, phone: digitsOnly });
+                      }}
                     />
                   </div>
                 </div>
@@ -237,7 +381,10 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
                   <input
                     type="text"
                     placeholder="e.g. 6046"
-                    className="w-full px-4 py-4 bg-gray-50 border-2 border-transparent focus:border-[#5ba409] rounded-2xl outline-none font-bold transition-all"
+                    disabled={isFarmer}
+                    className={`w-full px-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl outline-none font-bold transition-all ${
+                      isFarmer ? 'text-gray-500 cursor-not-allowed' : 'focus:border-[#5ba409]'
+                    }`}
                     value={formData.zip_code}
                     onChange={(e) => setFormData({ ...formData, zip_code: e.target.value })}
                   />
@@ -247,7 +394,10 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
                   <input
                     type="text"
                     placeholder="e.g. Minglanilla"
-                    className="w-full px-4 py-4 bg-gray-50 border-2 border-transparent focus:border-[#5ba409] rounded-2xl outline-none font-bold transition-all"
+                    disabled={isFarmer}
+                    className={`w-full px-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl outline-none font-bold transition-all ${
+                      isFarmer ? 'text-gray-500 cursor-not-allowed' : 'focus:border-[#5ba409]'
+                    }`}
                     value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                   />
@@ -256,13 +406,16 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Province</label>
                   <input
                     type="text"
-                    placeholder="e.g. Cebu"
-                    className="w-full px-4 py-4 bg-gray-50 border-2 border-transparent focus:border-[#5ba409] rounded-2xl outline-none font-bold transition-all"
+                    disabled
+                    className="w-full px-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl outline-none font-bold transition-all text-gray-500 cursor-not-allowed"
                     value={formData.province}
-                    onChange={(e) => setFormData({ ...formData, province: e.target.value })}
+                    onChange={() => {}}
                   />
                 </div>
               </div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-[#5ba409]">
+                Province is fixed to Cebu.
+              </p>
             </div>
           )}
 

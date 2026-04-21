@@ -83,7 +83,6 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
     getThreadMessages,
     refreshThreadMessages,
     markRead,
-    sendTextMessage,
     sendChatMessage,
     ensureConversation,
     threadsVersion,
@@ -111,13 +110,18 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
   const [selectedProductForModal, setSelectedProductForModal] = useState<any>(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
 
-  const autoStartedRef = useRef<Set<string>>(new Set());
   const hydratedParticipantsRef = useRef<Set<string>>(new Set());
   const contactProfilesRef = useRef<Record<string, ContactProfile>>({});
   const pendingProfileFetchesRef = useRef<Map<string, Promise<ContactProfile | null>>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
+
+  // Safety guard: if this component remains mounted during route transitions,
+  // do not render the Messages UI outside the /messages route.
+  if (location.pathname !== '/messages') {
+    return null;
+  }
 
   const myUserId = useMemo(() => {
     return Number(localStorage.getItem('agrilink_id') || localStorage.getItem('agrilink_userId') || 0);
@@ -217,7 +221,12 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
       const pid = Number(conv?.participantId);
       if (!Number.isFinite(pid) || pid <= 0) return;
 
-      const participantRole = String(conv?.participantType || '').toLowerCase();
+      let participantRole = String(conv?.participantType || '').toLowerCase();
+      if (!participantRole || participantRole === 'user') {
+        const profile = await fetchContactProfile(pid);
+        participantRole = String(profile?.role || participantRole).toLowerCase();
+      }
+
       if (participantRole === 'farmer') {
         navigate(`/profile/${pid}`);
         return;
@@ -225,7 +234,7 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
 
       navigate(`/profile/buyer/${pid}`);
     },
-    [navigate]
+    [fetchContactProfile, navigate]
   );
 
   const clearAttachment = useCallback(() => {
@@ -488,7 +497,6 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
     }
 
     const placeholder = buildPlaceholderConversation(contactId);
-    ensureConversation(placeholder);
 
     if (isMounted) {
       setSelectedConversation(placeholder);
@@ -504,18 +512,6 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
         const initials = `${first[0] || ''}${last[0] || ''}`.toUpperCase() || '?';
         const image = profile?.profile_image || profile?.image_path || initials;
 
-        const hydratedConversation: Conversation = {
-          id: idStr,
-          participantId: idStr,
-          participantName: name,
-          participantType: String(profile?.role || 'user'),
-          participantImage: image,
-          lastMessage: '',
-          lastMessageTime: '',
-          unreadCount: 0,
-        };
-
-        ensureConversation(hydratedConversation);
         setContactProfiles((prev) => ({ ...prev, [idStr]: profile as ContactProfile }));
 
         setSelectedConversation((prev) =>
@@ -538,7 +534,6 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
     buildPlaceholderConversation,
     contactId,
     conversations,
-    ensureConversation,
     fetchContactProfile,
     selectedConversation?.participantId,
   ]);
@@ -565,33 +560,6 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
       return changed ? { ...prev, ...latest } : prev;
     });
   }, [conversations, selectedConversation?.participantId]);
-
-  useEffect(() => {
-    const shouldAutoStart = searchParams.get('startConversation') === '1';
-    if (!shouldAutoStart || !contactId || contactId <= 0 || contactId === myUserId) return;
-
-    const starter = String(searchParams.get('starter') || '').trim();
-    const productName = String(searchParams.get('productName') || '').trim();
-    const fallbackStarter = productName
-      ? `Hi, I'm interested in your ${productName}. Is it still available?`
-      : "Hi, I'm interested. Is it still available?";
-    const starterMessage = starter || fallbackStarter;
-
-    const autoKey = `${contactId}:${starterMessage}`;
-    if (autoStartedRef.current.has(autoKey)) return;
-    autoStartedRef.current.add(autoKey);
-
-    getThreadMessages(contactId)
-      .then((thread) => {
-        if (thread.length === 0) {
-          return sendTextMessage(contactId, starterMessage);
-        }
-      })
-      .catch(console.error)
-      .finally(() => {
-        navigate(`/messages?contactId=${contactId}`, { replace: true });
-      });
-  }, [contactId, getThreadMessages, myUserId, navigate, searchParams, sendTextMessage]);
 
   useEffect(() => {
     refreshConversations().catch(() => null);
@@ -861,10 +829,11 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
                 <button
                   type="button"
                   onClick={handleBackToList}
-                  className="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+                  className="md:hidden inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-2 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
                   aria-label="Back to conversations"
                 >
                   <ArrowLeft className="h-4 w-4" />
+                  <span>Back</span>
                 </button>
 
                 <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-green-700 font-black overflow-hidden shadow-sm border border-green-100 shrink-0">
@@ -899,11 +868,7 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
               >
                 <User className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">
-                  {String(selectedConversation.participantType || '').toLowerCase() === 'farmer'
-                    ? 'View Profile'
-                    : 'Buyer Info'}
-                </span>
+                <span>View Profile</span>
                 <ExternalLink className="h-3.5 w-3.5" />
               </button>
             </header>
@@ -1140,4 +1105,3 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
 };
 
 export default MessagesPage;
-

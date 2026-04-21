@@ -148,12 +148,19 @@ const updateOnboardingStatus = async (req, res) => {
         }
         const userColumns = await getTableColumns('users_table');
         const farmColumnsInDb = await getTableColumns('farms_table');
+        const requesterRole = String(req.user?.role || '').toLowerCase();
+        const isBuyer = requesterRole === 'buyer';
+        const isFarmer = requesterRole === 'farmer';
         // 1️⃣ Normalize inputs
-        const safePhone = asNullable(phone);
+        const rawPhone = String(phone ?? '').replace(/\D/g, '');
+        if (rawPhone.length !== 11) {
+            return res.status(400).json({ message: 'Mobile number must be exactly 11 digits.' });
+        }
+        const safePhone = rawPhone;
         const safeAddress = asNullable(address);
-        const safeCity = asNullable(city) || 'Minglanilla';
-        const safeProvince = asNullable(province) || 'Cebu';
-        const safeZipCode = asNullable(zip_code) || '6046';
+        const safeCity = isFarmer ? 'Minglanilla' : asNullable(city);
+        const safeProvince = isFarmer ? 'Cebu' : asNullable(province);
+        const safeZipCode = isFarmer ? '6046' : asNullable(zip_code);
         const safeLat = asNullable(latitude);
         const safeLng = asNullable(longitude);
         // 2️⃣ Update core user profile
@@ -308,17 +315,28 @@ const updateUserProfile = async (req, res) => {
             return res.status(403).json({ message: 'You are not allowed to update this user.' });
         }
         const userIdValue = String(userIdParam);
+        const [roleRows] = await database_1.db.execute(`SELECT LOWER(COALESCE(role, '')) AS role
+       FROM users_table
+       WHERE id = ?
+       LIMIT 1`, [userIdValue]);
+        const targetRole = String(roleRows?.[0]?.role || '').toLowerCase();
+        const isFarmerTarget = targetRole === 'farmer';
         // Update core table
         const safeFirstName = asNullable(first_name);
         const safeLastName = asNullable(last_name);
-        const safePhone = asNullable(phone);
+        const normalizedPhone = phone !== undefined ? String(phone ?? '').replace(/\D/g, '') : undefined;
         const safeAddress = asNullable(address);
-        const safeCity = asNullable(city);
-        const safeProvince = asNullable(province);
-        const safeZipCode = asNullable(zip_code);
+        const safeCity = isFarmerTarget ? 'Minglanilla' : asNullable(city);
+        const safeProvince = isFarmerTarget ? 'Cebu' : asNullable(province);
+        const safeZipCode = isFarmerTarget ? '6046' : asNullable(zip_code);
         const safeLatitude = asNullable(latitude);
         const safeLongitude = asNullable(longitude);
         const safeBio = asNullable(req.body.bio);
+        if (phone !== undefined) {
+            if ((normalizedPhone || '').length !== 11) {
+                return res.status(400).json({ message: 'Mobile number must be exactly 11 digits.' });
+            }
+        }
         // if (safeFirstName === null || safeLastName === null) {
         //   return res.status(400).json({ message: 'First name and last name are required' });
         // }
@@ -328,30 +346,33 @@ const updateUserProfile = async (req, res) => {
         if (last_name !== undefined)
             userUpdates.push({ column: 'last_name', value: asNullable(last_name) });
         if (phone !== undefined)
-            userUpdates.push({ column: 'phone', value: asNullable(phone) });
+            userUpdates.push({ column: 'phone', value: normalizedPhone });
         if (address !== undefined)
             userUpdates.push({ column: 'address', value: asNullable(address) });
-        if (city !== undefined)
-            userUpdates.push({ column: 'city', value: asNullable(city) });
-        if (province !== undefined)
-            userUpdates.push({ column: 'province', value: asNullable(province) });
-        if (zip_code !== undefined)
-            userUpdates.push({ column: 'zip_code', value: asNullable(zip_code) });
+        if (isFarmerTarget) {
+            userUpdates.push({ column: 'city', value: 'Minglanilla' });
+            userUpdates.push({ column: 'province', value: 'Cebu' });
+            userUpdates.push({ column: 'zip_code', value: '6046' });
+        }
+        else {
+            if (city !== undefined)
+                userUpdates.push({ column: 'city', value: asNullable(city) });
+            if (province !== undefined)
+                userUpdates.push({ column: 'province', value: asNullable(province) });
+            if (zip_code !== undefined)
+                userUpdates.push({ column: 'zip_code', value: asNullable(zip_code) });
+        }
         if (latitude !== undefined)
             userUpdates.push({ column: 'latitude', value: asNullable(latitude) });
         if (longitude !== undefined)
             userUpdates.push({ column: 'longitude', value: asNullable(longitude) });
         if (req.body.bio !== undefined)
             userUpdates.push({ column: 'bio', value: asNullable(req.body.bio) });
-        const filteredUserUpdates = userUpdates.filter(({ column }) => userColumns.has(column));
         if (profileImagePath) {
-            if (userColumns.has('profile_image')) {
-                userUpdates.push({ column: 'profile_image', value: profileImagePath });
-            }
-            else if (userColumns.has('image_path')) {
-                userUpdates.push({ column: 'image_path', value: profileImagePath });
-            }
+            // Persist profile photo in users_table.profile_image as the canonical field.
+            userUpdates.push({ column: 'profile_image', value: profileImagePath });
         }
+        const filteredUserUpdates = userUpdates.filter(({ column }) => userColumns.has(column));
         if (filteredUserUpdates.length > 0) {
             await database_1.db.execute(`UPDATE users_table 
          SET ${filteredUserUpdates.map((u) => `${u.column} = ?`).join(', ')}
@@ -363,15 +384,21 @@ const updateUserProfile = async (req, res) => {
         const finalFarmAddress = isSameAsHome
             ? (address !== undefined ? safeAddress : undefined)
             : (farm_address !== undefined ? asNullable(farm_address) : undefined);
-        const finalFarmCity = isSameAsHome
-            ? (city !== undefined ? safeCity : undefined)
-            : (farm_city !== undefined ? asNullable(farm_city) : undefined);
-        const finalFarmProvince = isSameAsHome
-            ? (province !== undefined ? safeProvince : undefined)
-            : (farm_province !== undefined ? asNullable(farm_province) : undefined);
-        const finalFarmZipCode = isSameAsHome
-            ? (zip_code !== undefined ? safeZipCode : undefined)
-            : (farm_zip_code !== undefined ? asNullable(farm_zip_code) : undefined);
+        const finalFarmCity = isFarmerTarget
+            ? 'Minglanilla'
+            : isSameAsHome
+                ? (city !== undefined ? safeCity : undefined)
+                : (farm_city !== undefined ? asNullable(farm_city) : undefined);
+        const finalFarmProvince = isFarmerTarget
+            ? 'Cebu'
+            : isSameAsHome
+                ? (province !== undefined ? safeProvince : undefined)
+                : (farm_province !== undefined ? asNullable(farm_province) : undefined);
+        const finalFarmZipCode = isFarmerTarget
+            ? '6046'
+            : isSameAsHome
+                ? (zip_code !== undefined ? safeZipCode : undefined)
+                : (farm_zip_code !== undefined ? asNullable(farm_zip_code) : undefined);
         const finalFarmLatitude = isSameAsHome
             ? (latitude !== undefined ? safeLatitude : undefined)
             : (farm_latitude !== undefined ? asNullable(farm_latitude) : undefined);

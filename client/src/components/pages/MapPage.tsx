@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, Navigation, Search, Info, Map as MapIcon, ChevronRight, Phone, Clock, Star, Lock, User, Eye, Package, Compass, BadgeCheck } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import Map, { Marker, NavigationControl, Source, Layer } from 'react-map-gl/mapbox';
+import Map, { Marker, Source, Layer, type MapRef } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import customMapStyle from '../../assets/agrilink-map-style.json';
 import { API_BASE_URL, getFullImageUrl } from '../../api/apiConfig';
@@ -47,6 +47,8 @@ const MapPage: React.FC = () => {
   const [loadingFarmers, setLoadingFarmers] = useState(true);
   const [showAllFarms, setShowAllFarms] = useState(true);
   const [focusMode, setFocusMode] = useState(false);
+  const mapRef = useRef<MapRef | null>(null);
+
 
   // Fetch farmers from API
   useEffect(() => {
@@ -290,6 +292,7 @@ const MapPage: React.FC = () => {
       {/* Map Section - Top/Left */}
       <div className="w-full md:flex-1 h-[400px] md:h-full relative overflow-hidden bg-[#f0f4f8]">
         <Map
+          ref={mapRef}
           {...viewState}
           onMove={evt => setViewState(evt.viewState)}
           onClick={(e) => {
@@ -299,8 +302,6 @@ const MapPage: React.FC = () => {
           mapboxAccessToken={import.meta.env.VITE_MAPBOX_TOKEN || ''}
           style={{ width: '100%', height: '100%' }}
         >
-          <NavigationControl position="top-right" />
-
           {/* User Marker */}
           {userLocation && (
             <Marker

@@ -1,4 +1,4 @@
-import { ShoppingCart, Menu, X, LogOut, User as UserIcon, MessageSquare, Bell, CheckCheck, ShoppingBag, Package, Tractor, Send } from 'lucide-react';
+import { ShoppingCart, Menu, X, LogOut, User as UserIcon, MessageSquare, Bell, CheckCheck, ShoppingBag, Package, Tractor, Send, Map } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { NavbarProps } from '../../types';
 import { useState, useRef, useEffect } from 'react';
@@ -55,10 +55,14 @@ const Navbar: React.FC<NavbarProps> = ({ userType, firstName, lastName, profileI
     return () => window.removeEventListener('cart-updated', updateCount);
   }, []);
 
-  const isFarmer = userType.toLowerCase() === 'farmer';
+  const normalizedUserType = userType.toLowerCase();
+  const isFarmer = normalizedUserType === 'farmer';
+  const isBuyer = normalizedUserType === 'buyer';
   const displayName = [firstName, lastName].filter(Boolean).join(' ').trim() || 'Profile';
   const previewNotifications = notifications.slice(0, 4);
-  const previewConversations = conversations.slice(0, 4);
+  const previewConversations = conversations
+    .filter((c) => Number(c.unreadCount || 0) > 0 || String(c.lastMessage || '').trim().length > 0)
+    .slice(0, 4);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -96,9 +100,6 @@ const Navbar: React.FC<NavbarProps> = ({ userType, firstName, lastName, profileI
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-6">
             <Link to="/buyer/marketplace" className="text-gray-700 hover:text-green-600 font-semibold transition-colors px-3 py-2 rounded-lg hover:bg-[#F9FBE7]">Marketplace</Link>
-            {isFarmer && (
-              <Link to="/buyer/map" className="text-gray-700 hover:text-[#5ba409] font-semibold transition-colors px-3 py-2 rounded-lg hover:bg-[#F9FBE7]">Farm Map</Link>
-            )}
             <Link to="/about" className="text-gray-700 hover:text-[#5ba409] font-semibold transition-colors px-3 py-2 rounded-lg hover:bg-[#F9FBE7]">About</Link>
 
             <div className="flex items-center space-x-3">
@@ -110,6 +111,11 @@ const Navbar: React.FC<NavbarProps> = ({ userType, firstName, lastName, profileI
                       {cartCount}
                     </span>
                   )}
+                </Link>
+              )}
+              {isLoggedIn && isBuyer && (
+                <Link to="/buyer/map" className="relative p-2 hover:bg-[#F9FBE7] rounded-full transition-colors block" title="View farmers map">
+                  <Map className="w-6 h-6 text-[#5ba409]" />
                 </Link>
               )}
 
@@ -150,6 +156,11 @@ const Navbar: React.FC<NavbarProps> = ({ userType, firstName, lastName, profileI
 
                         {/* Conversation List */}
                         <div className="divide-y divide-gray-50 max-h-80 overflow-y-auto">
+                          {previewConversations.length === 0 && (
+                            <div className="p-6 text-center text-xs font-semibold text-gray-400">
+                              No conversations yet.
+                            </div>
+                          )}
                           {previewConversations.map(conv => (
                             <button
                               key={conv.id}
@@ -335,9 +346,6 @@ const Navbar: React.FC<NavbarProps> = ({ userType, firstName, lastName, profileI
         {mobileMenuOpen && (
           <div className="md:hidden pb-4 space-y-2 animate-fadeIn">
             <Link to="/buyer/marketplace" onClick={() => setMobileMenuOpen(false)} className="w-full text-left px-4 py-3 rounded-lg hover:bg-[#F9FBE7] font-semibold block">Marketplace</Link>
-            {isFarmer && (
-              <Link to="/buyer/map" onClick={() => setMobileMenuOpen(false)} className="w-full text-left px-4 py-3 rounded-lg hover:bg-[#F9FBE7] font-semibold block">Farm Map</Link>
-            )}
             <Link to="/about" onClick={() => setMobileMenuOpen(false)} className="w-full text-left px-4 py-3 rounded-lg hover:bg-[#F9FBE7] font-semibold block">About</Link>
 
             {isLoggedIn && userType.toLowerCase() !== 'brgy_official' && (

@@ -150,7 +150,6 @@ const FarmerPublicProfilePage: React.FC = () => {
       contactName: displayName,
       contactImage: String(profile.profile_image || ''),
       contactRole: String(profile.role || 'farmer'),
-      startConversation: '1',
     });
 
     navigate(`/messages?${params.toString()}`);
