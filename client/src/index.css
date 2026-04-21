@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Brand Green (logo: #5ba409) ── */
+  --color-green-50:  #f2f9e6;
+  --color-green-100: #e0f2c0;
+  --color-green-200: #c5e88e;
+  --color-green-300: #a2d959;
+  --color-green-400: #80c72c;
+  --color-green-500: #6bb80e;
+  --color-green-600: #5ba409;
+  --color-green-700: #498507;
+  --color-green-800: #396706;
+  --color-green-900: #274805;
+  --color-green-950: #152a02;
+}
+
+@layer utilities {
+  .animate-in {
+    animation-duration: 500ms;
+    animation-fill-mode: both;
+  }
+  
+  .fade-in {
+    animation-name: fadeIn;
+  }
+  
+  .slide-in-from-bottom-4 {
+    animation-name: slideInFromBottom4;
+  }
+
+  .slide-in-from-bottom-10 {
+    animation-name: slideInFromBottom10;
+  }
+
+  .zoom-in-95 {
+    animation-name: zoomIn95;
+  }
+
+  .slide-in-from-right-4 {
+    animation-name: slideInFromRight4;
+  }
+
+  .slide-in-from-top-4 {
+    animation-name: slideInFromTop4;
+  }
+
+  .slide-in-from-top-2 {
+    animation-name: slideInFromTop2;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #e5e7eb;
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #d1d5db;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInFromBottom4 {
+  from { transform: translateY(1rem); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideInFromBottom10 {
+  from { transform: translateY(2.5rem); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideInFromRight4 {
+  from { transform: translateX(1rem); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideInFromTop4 {
+  from { transform: translateY(-1rem); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideInFromTop2 {
+  from { transform: translateY(-0.5rem); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes zoomIn95 {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}

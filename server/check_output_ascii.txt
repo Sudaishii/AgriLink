@@ -1,0 +1,105 @@
+﻿[dotenv@17.3.1] injecting env (13) from .env -- tip: ΓÜí∩╕Å secrets for agents: https://dotenvx.com/as2
+--- Checking users_table data ---
+Users found: 3
+[
+  {
+    "id": 1,
+    "auth_id": 1,
+    "first_name": "Rasheed",
+    "last_name": "Culpa necessitatibus",
+    "phone": "+63 912 345 6789",
+    "address": "123 Harvest Lane",
+    "city": "Minglanilla",
+    "province": "Cebu",
+    "zip_code": "6046",
+    "latitude": "10.24440000",
+    "longitude": "123.79150000",
+    "role": "farmer",
+    "onboarding_completed": 1,
+    "profile_image": null,
+    "bio": null,
+    "last_session_activity_at": null,
+    "farm_address": null,
+    "farm_city": null,
+    "farm_province": null,
+    "farm_zip_code": null,
+    "farm_latitude": null,
+    "farm_longitude": null,
+    "farm_address_same_as_home": 1,
+    "created_at": "2026-03-04T04:21:37.000Z"
+  },
+  {
+    "id": 2,
+    "auth_id": 2,
+    "first_name": "AgriLink",
+    "last_name": "Admin",
+    "phone": null,
+    "address": null,
+    "city": null,
+    "province": null,
+    "zip_code": null,
+    "latitude": null,
+    "longitude": null,
+    "role": "admin",
+    "onboarding_completed": 0,
+    "profile_image": null,
+    "bio": null,
+    "last_session_activity_at": null,
+    "farm_address": null,
+    "farm_city": null,
+    "farm_province": null,
+    "farm_zip_code": null,
+    "farm_latitude": null,
+    "farm_longitude": null,
+    "farm_address_same_as_home": 1,
+    "created_at": "2026-04-18T02:41:15.000Z"
+  },
+  {
+    "id": 3,
+    "auth_id": 3,
+    "first_name": "Rasheed",
+    "last_name": "Doe",
+    "phone": "09456989966",
+    "address": "In Front of Ciriaco Paradela School, Tinubdan, San Fernando, Cebu",
+    "city": "San Fernando",
+    "province": "Cebu",
+    "zip_code": "6018",
+    "latitude": "10.16413600",
+    "longitude": "123.70378000",
+    "role": "buyer",
+    "onboarding_completed": 1,
+    "profile_image": "/uploads/profile_image-1776483721162-280147977.jpg",
+    "bio": null,
+    "last_session_activity_at": null,
+    "farm_address": null,
+    "farm_city": null,
+    "farm_province": null,
+    "farm_zip_code": null,
+    "farm_latitude": null,
+    "farm_longitude": null,
+    "farm_address_same_as_home": 1,
+    "created_at": "2026-04-18T03:03:51.000Z"
+  }
+]
+
+--- Checking auth_table data ---
+[
+  {
+    "id": 1,
+    "email": "tapalesrasheed123@gmail.com",
+    "role_id": 2,
+    "status": "active"
+  },
+  {
+    "id": 2,
+    "email": "AgriLink",
+    "role_id": 4,
+    "status": "active"
+  },
+  {
+    "id": 3,
+    "email": "tapalesrasheed123+1@gmail.com",
+    "role_id": 1,
+    "status": "active"
+  }
+]

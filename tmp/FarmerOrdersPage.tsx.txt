@@ -1,0 +1,294 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  Package,
+  RefreshCcw,
+  X,
+} from 'lucide-react';
+import { API_BASE_URL } from '../../../api/apiConfig';
+import { useToast } from '../../ui/Toast';
+import Modal from '../../ui/Modal';
+
+type OrderFilter = 'All' | 'Pending' | 'Confirmed' | 'Completed';
+
+const statusTone = (status: string) => {
+  const s = String(status || '').toLowerCase();
+  if (s === 'pending') return 'bg-amber-50 text-amber-800 border-amber-200';
+  if (s === 'confirmed') return 'bg-blue-50 text-blue-800 border-blue-200';
+  if (s === 'completed') return 'bg-green-50 text-green-800 border-green-200';
+  if (s === 'cancelled') return 'bg-rose-50 text-rose-800 border-rose-200';
+  return 'bg-slate-50 text-slate-700 border-slate-200';
+};
+
+const FarmerOrdersPage: React.FC = () => {
+  const { success: showSuccess, error: showError } = useToast();
+
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [filter, setFilter] = useState<OrderFilter>('All');
+
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState<any | null>(null);
+
+  const userId = localStorage.getItem('agrilink_id');
+
+  const fetchOrders = async () => {
+    if (!userId) return;
+    try {
+      setLoading(true);
+      setError('');
+      const token = localStorage.getItem('agrilink_token');
+      const res = await fetch(`${API_BASE_URL}/purchases/farmer/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) setOrders(data.orders || []);
+      else setError(data.message);
+    } catch {
+      setError('Failed to load orders.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  const handleUpdateStatus = async (orderId: number, newStatus: string) => {
+    try {
+      const token = localStorage.getItem('agrilink_token');
+      const res = await fetch(`${API_BASE_URL}/purchases/status/${orderId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus, u_id: userId }),
+      });
+
+      if (res.ok) {
+        showSuccess(`Order marked ${newStatus.toLowerCase()}.`);
+        fetchOrders();
+      } else {
+        const data = await res.json();
+        showError(data.message || 'Update failed.');
+      }
+    } catch {
+      showError('System sync failed. Please try again.');
+    }
+  };
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o) => filter === 'All' || o.req_status === filter);
+  }, [orders, filter]);
+
+  return (
+    <div className="agri-farmer ag-page">
+      <div className="ag-container">
+        <div className="ag-header">
+          <div>
+            <div className="ag-kicker">
+              <span className="ag-kicker-dot" />
+              Orders
+            </div>
+            <h1 className="ag-display ag-title">Order requests</h1>
+            <p className="ag-subtitle">Review, confirm, and complete incoming orders.</p>
+          </div>
+
+          <div className="ag-actions">
+            <button type="button" onClick={fetchOrders} className="ag-btn ag-btn-secondary">
+              <RefreshCcw className="w-4 h-4" />
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 mb-6">
+          {(['All', 'Pending', 'Confirmed', 'Completed'] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setFilter(f)}
+              className={
+                f === filter
+                  ? 'ag-btn ag-btn-primary'
+                  : 'ag-btn ag-btn-secondary'
+              }
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-600" />
+            <p className="font-semibold text-red-900">{error}</p>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="py-28 flex flex-col items-center gap-4">
+            <RefreshCcw className="w-10 h-10 text-[#5ba409] animate-spin" />
+            <p className="text-sm font-semibold text-slate-500">Loading orders…</p>
+          </div>
+        ) : filteredOrders.length === 0 ? (
+          <div className="ag-card ag-card-pad text-center py-14">
+            <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-slate-200">
+              <Package className="w-7 h-7 text-slate-400" />
+            </div>
+            <h3 className="ag-display text-2xl font-extrabold text-slate-900">No orders</h3>
+            <p className="text-slate-600 mt-2">New purchase requests will appear here.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredOrders.map((order) => {
+              const amount = Number(order.quantity * order.p_price);
+              return (
+                <div key={order.req_id} className="ag-card">
+                  <div className="ag-card-pad">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold ${statusTone(order.req_status)}`}>
+                            <span className="w-2 h-2 rounded-full bg-current opacity-70" />
+                            {order.req_status}
+                          </span>
+                          <span className="text-xs text-slate-500 inline-flex items-center gap-2">
+                            <Clock className="w-4 h-4" />
+                            {new Date(order.req_date).toLocaleString()}
+                          </span>
+                        </div>
+
+                        <h3 className="mt-2 text-lg font-semibold text-slate-900 truncate">{order.p_name}</h3>
+                        <p className="text-sm text-slate-600">
+                          Buyer: <span className="font-semibold text-slate-800">{order.buyer_first} {order.buyer_last}</span>
+                          <span className="mx-2 text-slate-300">|</span>
+                          Qty: <span className="font-semibold text-slate-800">{order.quantity}</span>
+                        </p>
+                      </div>
+
+                      <div className="shrink-0 text-right">
+                        <p className="text-xs text-slate-500">Amount</p>
+                        <p className="ag-display text-2xl font-extrabold text-slate-900">PHP {Number.isFinite(amount) ? amount.toLocaleString() : '-'}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {order.req_status === 'Pending' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateStatus(order.req_id, 'Confirmed')}
+                            className="ag-btn ag-btn-primary"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            Confirm
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOrderToCancel(order);
+                              setCancelModalOpen(true);
+                            }}
+                            className="ag-btn ag-btn-danger"
+                          >
+                            <X className="w-4 h-4" />
+                            Cancel
+                          </button>
+                        </>
+                      )}
+
+                      {order.req_status === 'Confirmed' && (
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateStatus(order.req_id, 'Completed')}
+                          className="ag-btn ag-btn-primary"
+                        >
+                          <Package className="w-4 h-4" />
+                          Mark as completed
+                        </button>
+                      )}
+
+                      {order.req_status === 'Completed' && (
+                        <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm font-semibold">
+                          <CheckCircle2 className="w-4 h-4" />
+                          Completed
+                        </div>
+                      )}
+
+                      {String(order.req_status).toLowerCase() === 'cancelled' && (
+                        <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-semibold">
+                          <X className="w-4 h-4" />
+                          Cancelled
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <Modal
+          isOpen={cancelModalOpen}
+          onClose={() => {
+            setCancelModalOpen(false);
+            setOrderToCancel(null);
+          }}
+          title="Cancel order"
+          size="md"
+        >
+          <div className="space-y-4">
+            <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl">
+              <p className="font-semibold text-slate-900">Are you sure you want to cancel this order?</p>
+              <p className="text-sm text-slate-700 mt-1">
+                {orderToCancel?.p_name ? (
+                  <>
+                    <span className="font-semibold">{orderToCancel.p_name}</span> ({orderToCancel.quantity})
+                  </>
+                ) : (
+                  'This action will set the order status to Cancelled.'
+                )}
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setCancelModalOpen(false);
+                  setOrderToCancel(null);
+                }}
+                className="ag-btn ag-btn-secondary flex-1"
+              >
+                Keep
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!orderToCancel) return;
+                  handleUpdateStatus(orderToCancel.req_id, 'Cancelled');
+                  setCancelModalOpen(false);
+                  setOrderToCancel(null);
+                }}
+                className="ag-btn ag-btn-danger flex-1"
+              >
+                Cancel order
+              </button>
+            </div>
+          </div>
+        </Modal>
+      </div>
+    </div>
+  );
+};
+
+export default FarmerOrdersPage;
