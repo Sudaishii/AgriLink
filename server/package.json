@@ -30,7 +30,6 @@
   "scripts": {
     "dev": "ts-node src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js",
-    "index-images": "ts-node src/scripts/bulkIndexImages.ts"
+    "start": "node dist/server.js"
   }
 }
