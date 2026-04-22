@@ -5,6 +5,7 @@ import Modal from '../../ui/Modal';
 import ConfirmationModal from '../../ui/ConfirmationModal';
 import { API_BASE_URL, getStoredAuthToken, getFullImageUrl } from '../../../api/apiConfig';
 import { useToast } from '../../ui/Toast';
+import { MINGLANILLA_BARANGAYS } from '../../../constants/barangays';
 
 interface ExternalUser {
   id: string | number;
@@ -17,12 +18,6 @@ interface ExternalUser {
   status: string;
   profile_image?: string;
 }
-
-const BRGY_LIST = [
-    "Tulay", "Tunghaan", "Tungkop", "Tungkil", "Vito", "Ward I", "Ward II", "Ward III", "Ward IV",
-    "Cajel", "Calajoan", "Camp 8", "Cuanos", "Dakutan", "Guindaruhan", "Lipata", "Manduang",
-    "Pakigne", "Poblacion Ward I", "Poblacion Ward II", "Poblacion Ward III", "Poblacion Ward IV"
-];
 
 interface AdminUsersPageProps {
   viewerRole?: string;
@@ -40,7 +35,7 @@ const AdminUsersPage: React.FC<AdminUsersPageProps> = ({ viewerRole }) => {
   const [isRegModalOpen, setIsRegModalOpen] = useState(false);
   const [regType, setRegType] = useState<'farmer' | 'buyer' | 'brgy_official' | null>(null);
   const [regForm, setRegForm] = useState({ firstName: '', lastName: '', email: '', password: '', city: 'Minglanilla', province: 'Cebu' });
-  const [brgyOfficialBrgy, setBrgyOfficialBrgy] = useState(BRGY_LIST[0]);
+  const [brgyOfficialBrgy, setBrgyOfficialBrgy] = useState(MINGLANILLA_BARANGAYS[0]);
   const [magicLink, setMagicLink] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
@@ -490,7 +485,7 @@ const AdminUsersPage: React.FC<AdminUsersPageProps> = ({ viewerRole }) => {
                                         onChange={e => setBrgyOfficialBrgy(e.target.value)}
                                         className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:bg-white focus:border-[#5ba409] focus:ring-2 focus:ring-[#5ba409]/20 transition-all outline-none appearance-none"
                                     >
-                                        {BRGY_LIST.map(b => <option key={b} value={b}>{b}</option>)}
+                                        {MINGLANILLA_BARANGAYS.map(b => <option key={b} value={b}>{b}</option>)}
                                     </select>
                                 </div>
                                 <div className="space-y-1.5 pt-2">

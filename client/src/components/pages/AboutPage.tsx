@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   Users, 
   Leaf, 
@@ -11,9 +11,56 @@ import {
   Globe
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../../api/apiConfig';
+
+interface FarmerLite {
+  id: number;
+  farm_city?: string | null;
+}
+
+interface ProductLite {
+  p_id?: number;
+  p_price?: number | string;
+  p_status?: string | null;
+}
 
 const AboutPage: React.FC = () => {
   const navigate = useNavigate();
+  const hasSession = localStorage.getItem('agrilink_isLoggedIn') === 'true' || !!localStorage.getItem('agrilink_token');
+  const [farmers, setFarmers] = useState<FarmerLite[]>([]);
+  const [products, setProducts] = useState<ProductLite[]>([]);
+  const [loadingStats, setLoadingStats] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+
+    const loadStats = async () => {
+      try {
+        const [farmersRes, productsRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/users/farmers/all`),
+          fetch(`${API_BASE_URL}/products`),
+        ]);
+
+        const farmersData = farmersRes.ok ? await farmersRes.json() : [];
+        const productsData = productsRes.ok ? await productsRes.json() : [];
+
+        if (!alive) return;
+        setFarmers(Array.isArray(farmersData) ? farmersData : []);
+        setProducts(Array.isArray(productsData?.products) ? productsData.products : Array.isArray(productsData) ? productsData : []);
+      } catch {
+        if (!alive) return;
+        setFarmers([]);
+        setProducts([]);
+      } finally {
+        if (alive) setLoadingStats(false);
+      }
+    };
+
+    void loadStats();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const values = [
     {
@@ -33,12 +80,25 @@ const AboutPage: React.FC = () => {
     }
   ];
 
-  const milestones = [
-    { label: "Partner Farmers", value: "500+" },
-    { label: "Fresh Deliveries", value: "12k+" },
-    { label: "LGU Partners", value: "18+" },
-    { label: "Community Hubs", value: "45+" }
-  ];
+  const milestones = useMemo(() => {
+    const activeProducts = products.filter((p) => String(p.p_status || 'active').toLowerCase() !== 'archived');
+    const uniqueCities = new Set(
+      farmers
+        .map((f) => (f.farm_city || '').trim().toLowerCase())
+        .filter(Boolean)
+    );
+    const prices = activeProducts
+      .map((p) => Number(p.p_price))
+      .filter((v) => Number.isFinite(v) && v > 0);
+    const avgPrice = prices.length ? prices.reduce((sum, v) => sum + v, 0) / prices.length : 0;
+
+    return [
+      { label: 'Partner Farmers', value: loadingStats ? '...' : farmers.length.toLocaleString() },
+      { label: 'Active Listings', value: loadingStats ? '...' : activeProducts.length.toLocaleString() },
+      { label: 'Covered Cities', value: loadingStats ? '...' : uniqueCities.size.toLocaleString() },
+      { label: 'Avg Price', value: loadingStats ? '...' : `₱${avgPrice.toFixed(2)}` },
+    ];
+  }, [farmers, products, loadingStats]);
 
   return (
     <div className="min-h-screen bg-white overflow-hidden pb-12">
@@ -70,13 +130,13 @@ const AboutPage: React.FC = () => {
             <div className="flex flex-wrap gap-4">
               <button 
                 onClick={() => navigate('/register')}
-                className="px-8 py-4 bg-gray-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-black hover:-translate-y-1 transition-all active:scale-95"
+                className="px-8 py-4 bg-[#5ba409] text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-green-500/20 hover:bg-[#4d8f08] hover:-translate-y-1 transition-all active:scale-95"
               >
                 Join the Mission
               </button>
               <button 
-                onClick={() => navigate('/marketplace')}
-                className="px-8 py-4 bg-white text-gray-900 border border-gray-100 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-sm hover:shadow-lg hover:border-[#5ba409]/20 transition-all active:scale-95"
+                onClick={() => navigate('/buyer/marketplace')}
+                className="px-8 py-4 bg-white text-[#5ba409] border border-[#5ba409]/35 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-sm hover:shadow-lg hover:bg-[#f2f9e6] hover:border-[#5ba409] transition-all active:scale-95"
               >
                 Explore Harvest
               </button>
@@ -169,28 +229,28 @@ const AboutPage: React.FC = () => {
       </section>
 
       {/* 🌟 Core Values */}
-      <section className="py-24 bg-gray-900 text-white rounded-[4rem] mx-4 relative overflow-hidden">
-        {/* Abstract Background Shapes */}
-        <div className="absolute top-0 right-0 w-[40%] h-[40%] bg-gradient-to-br from-[#5ba409]/20 to-transparent rounded-full blur-[100px]" />
-        
+      <section className="py-24 rounded-[3rem] mx-4 relative overflow-hidden border border-[#5ba409]/10 bg-gradient-to-br from-[#f6fbef] via-white to-[#eef8df]">
+        <div className="absolute top-0 right-0 w-[38%] h-[40%] bg-[#5ba409]/10 rounded-full blur-[110px]" />
+        <div className="absolute bottom-0 left-0 w-[35%] h-[35%] bg-[#5ba409]/10 rounded-full blur-[120px]" />
+
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
-          <h2 className="text-3xl md:text-5xl font-black tracking-tight mb-20 italic">
-            Rooted in <span className="text-[#5ba409]">Excellence</span>.
+          <h2 className="text-3xl md:text-5xl font-black tracking-tight text-slate-900 mb-20">
+            Where <span className="text-[#5ba409]">Quality</span> Takes Root
           </h2>
-          
-          <div className="grid md:grid-cols-3 gap-12">
+
+          <div className="grid md:grid-cols-3 gap-8">
             {values.map((val, idx) => (
-              <div key={idx} className="group relative">
-                <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center text-[#5ba409] mx-auto mb-8 group-hover:bg-[#5ba409] group-hover:text-white transition-all duration-500 group-hover:rotate-6">
+              <div
+                key={idx}
+                className="group rounded-3xl border border-[#5ba409]/15 bg-white/85 backdrop-blur-sm p-8 shadow-sm hover:shadow-md hover:border-[#5ba409]/35 transition-all"
+              >
+                <div className="w-16 h-16 bg-[#f2f9e6] rounded-2xl flex items-center justify-center text-[#5ba409] mx-auto mb-6 group-hover:bg-[#5ba409] group-hover:text-white transition-all duration-300">
                   {val.icon}
                 </div>
-                <h3 className="text-xl font-black mb-4 uppercase tracking-[0.2em]">{val.title}</h3>
-                <p className="text-gray-400 font-medium leading-relaxed max-w-xs mx-auto">
+                <h3 className="text-xl font-black mb-4 uppercase tracking-[0.16em] text-slate-900">{val.title}</h3>
+                <p className="text-slate-600 font-medium leading-relaxed max-w-xs mx-auto">
                   {val.description}
                 </p>
-                <div className="mt-8 opacity-0 group-hover:opacity-100 transition-opacity">
-                   <div className="w-12 h-1 bg-[#5ba409] mx-auto rounded-full" />
-                </div>
               </div>
             ))}
           </div>
@@ -198,11 +258,12 @@ const AboutPage: React.FC = () => {
       </section>
 
       {/* 📍 CTA Section */}
+      {!hasSession && (
       <section className="py-24 md:py-32">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-[#F8FAFC] rounded-[3rem] p-10 md:p-20 relative overflow-hidden flex flex-col items-center text-center">
             <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-[#5ba409]/5 rounded-full blur-[100px]" />
-            <div className="absolute bottom-[-20%] right-[-10%] w-[40%] h-[40%] bg-blue-500/5 rounded-full blur-[100px]" />
+            <div className="absolute bottom-[-20%] right-[-10%] w-[40%] h-[40%] bg-[#5ba409]/5 rounded-full blur-[100px]" />
             
             <MapPin className="w-12 h-12 text-[#5ba409] mb-8" />
             <h2 className="text-4xl md:text-6xl font-black text-gray-900 tracking-tight leading-none mb-8">
@@ -214,14 +275,14 @@ const AboutPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row gap-6 w-full max-w-md">
               <button 
                 onClick={() => navigate('/register')}
-                className="flex-1 py-5 bg-gray-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-black transition-all flex items-center justify-center gap-3 group"
+                className="flex-1 py-5 bg-[#5ba409] text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-green-500/20 hover:bg-[#4d8f08] transition-all flex items-center justify-center gap-3 group"
               >
                 Get Started
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </button>
               <button 
                 onClick={() => navigate('/login')}
-                className="flex-1 py-5 bg-white text-gray-900 border border-gray-100 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-sm hover:shadow-lg transition-all"
+                className="flex-1 py-5 bg-white text-[#5ba409] border border-[#5ba409]/35 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-sm hover:shadow-lg hover:bg-[#f2f9e6] hover:border-[#5ba409] transition-all"
               >
                 Sign In
               </button>
@@ -233,6 +294,7 @@ const AboutPage: React.FC = () => {
           </div>
         </div>
       </section>
+      )}
     </div>
   );
 };

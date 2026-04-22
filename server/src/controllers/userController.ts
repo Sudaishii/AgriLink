@@ -218,8 +218,8 @@ export const updateOnboardingStatus = async (req: Request, res: Response) => {
       [...finalUserUpdates.map(u => u.value), userIdParam]
     );
 
-    // 3️⃣ Upsert farm details in farms_table
-    if (farmColumnsInDb.size > 0) {
+    // 3️⃣ Upsert farm details in farms_table (schema-safe)
+    if (farmColumnsInDb.size > 0 && farmColumnsInDb.has('user_id')) {
       const finalFarmAddress = legAddress;
       const finalFarmCity = safeCity;
       const finalFarmProvince = safeProvince;
@@ -227,30 +227,48 @@ export const updateOnboardingStatus = async (req: Request, res: Response) => {
       const finalFarmLatitude = legLat;
       const finalFarmLongitude = legLng;
 
-      await db.execute(
-        `INSERT INTO farms_table (
-           user_id, farm_address, farm_city, farm_province, 
-           farm_zip_code, farm_latitude, farm_longitude, is_same_as_home
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE
-           farm_address = VALUES(farm_address),
-           farm_city = VALUES(farm_city),
-           farm_province = VALUES(farm_province),
-           farm_zip_code = VALUES(farm_zip_code),
-           farm_latitude = VALUES(farm_latitude),
-           farm_longitude = VALUES(farm_longitude),
-           is_same_as_home = VALUES(is_same_as_home)`,
-        [
-          userIdParam, finalFarmAddress, finalFarmCity, finalFarmProvince, 
-          finalFarmZipCode, finalFarmLatitude, finalFarmLongitude, isSameAsHome ? 1 : 0
-        ]
-      );
+      const farmUpdates: Array<{ column: string; value: string | number | null }> = [
+        { column: 'farm_address', value: finalFarmAddress as string | number | null },
+        { column: 'farm_city', value: finalFarmCity as string | number | null },
+        { column: 'farm_province', value: finalFarmProvince as string | number | null },
+        { column: 'farm_zip_code', value: finalFarmZipCode as string | number | null },
+        { column: 'farm_latitude', value: finalFarmLatitude as string | number | null },
+        { column: 'farm_longitude', value: finalFarmLongitude as string | number | null },
+        { column: 'is_same_as_home', value: isSameAsHome ? 1 : 0 },
+      ].filter((entry) => farmColumnsInDb.has(entry.column));
+
+      if (farmUpdates.length > 0) {
+        const [existingFarmRows]: any = await db.execute(
+          'SELECT id FROM farms_table WHERE user_id = ? LIMIT 1',
+          [userIdParam]
+        );
+
+        if ((existingFarmRows || []).length > 0) {
+          await db.execute(
+            `UPDATE farms_table
+             SET ${farmUpdates.map((entry) => `${entry.column} = ?`).join(', ')}
+             WHERE user_id = ?`,
+            [...farmUpdates.map((entry) => entry.value), userIdParam]
+          );
+        } else {
+          const insertColumns = ['user_id', ...farmUpdates.map((entry) => entry.column)];
+          const insertValues: Array<string | number | null> = [
+            userIdParam as unknown as string | number,
+            ...farmUpdates.map((entry) => entry.value),
+          ];
+          await db.execute(
+            `INSERT INTO farms_table (${insertColumns.join(', ')})
+             VALUES (${insertColumns.map(() => '?').join(', ')})`,
+            insertValues
+          );
+        }
+      }
     }
 
     return res.status(200).json({ message: 'Normalized onboarding completed' });
   } catch (err: any) {
     console.error(err);
-    return res.status(500).json({ message: 'Error updating onboarding status in farms_table' });
+    return res.status(500).json({ message: err?.message || 'Error updating onboarding status in farms_table' });
   }
 };
 

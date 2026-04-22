@@ -18,6 +18,7 @@ import {
   Bell,
   ShieldCheck,
   ShoppingBag,
+  TrendingUp,
 } from 'lucide-react';
 import type { SidebarProps } from '../../types';
 import LogoutConfirmationModal from '../ui/LogoutConfirmationModal';
@@ -32,6 +33,7 @@ const farmerNav = [
   { label: 'Marketplace', icon: Store, to: '/buyer/marketplace' },
   { label: 'My Listings', icon: Package, to: '/farmer/listings' },
   { label: 'Orders', icon: ShoppingBag, to: '/farmer/orders' },
+  { label: 'Earnings & Performance', icon: TrendingUp, to: '/farmer/earnings' },
   { label: 'My Cart', icon: ShoppingCart, to: '/buyer/cart' },
   { label: 'Maps', icon: Map, to: '/buyer/map' },
   { label: 'Messages', icon: MessageSquare, to: '/messages' },

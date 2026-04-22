@@ -117,12 +117,6 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
 
-  // Safety guard: if this component remains mounted during route transitions,
-  // do not render the Messages UI outside the /messages route.
-  if (location.pathname !== '/messages') {
-    return null;
-  }
-
   const myUserId = useMemo(() => {
     return Number(localStorage.getItem('agrilink_id') || localStorage.getItem('agrilink_userId') || 0);
   }, []);
@@ -143,6 +137,12 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
     () => conversations.reduce((acc, c) => acc + (Number(c.unreadCount) || 0), 0),
     [conversations]
   );
+
+  const isDraftConversation = useMemo(() => {
+    const selectedId = String(selectedConversation?.participantId || '').trim();
+    if (!selectedId) return false;
+    return !conversations.some((c) => String(c.participantId || '').trim() === selectedId);
+  }, [conversations, selectedConversation?.participantId]);
 
   const isConversationLoading = !isReady && conversations.length === 0;
   const hasConversationError = Boolean(error);
@@ -501,6 +501,7 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
     if (isMounted) {
       setSelectedConversation(placeholder);
     }
+    ensureConversation(placeholder);
 
     fetchContactProfile(contactId)
       .then((profile) => {
@@ -534,6 +535,7 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
     buildPlaceholderConversation,
     contactId,
     conversations,
+    ensureConversation,
     fetchContactProfile,
     selectedConversation?.participantId,
   ]);
@@ -881,7 +883,18 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
                 <div className="text-xs font-medium text-slate-500">Loading messages...</div>
               )}
               {!isLoadingThread && messages.length === 0 && (
-                <div className="text-xs font-medium text-slate-500">No messages yet.</div>
+                <div className="grid place-items-center min-h-[40vh] text-center">
+                  <div className="max-w-sm">
+                    <p className="text-sm font-semibold text-slate-600">
+                      {isDraftConversation
+                        ? `Start your conversation with ${selectedConversation?.participantName || 'this farmer'}.`
+                        : 'No messages yet.'}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {isDraftConversation ? 'Send your first message below.' : 'Send a message below to begin.'}
+                    </p>
+                  </div>
+                </div>
               )}
 
               <div className="space-y-5">

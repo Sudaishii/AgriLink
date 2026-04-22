@@ -9,6 +9,7 @@ interface ModalProps {
   children: React.ReactNode;
   maxWidth?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | 'full';
+  showCloseButton?: boolean;
 }
 
 const sizeMap: Record<string, string> = {
@@ -30,6 +31,7 @@ const Modal: React.FC<ModalProps> = ({
   children,
   maxWidth,
   size = 'lg',
+  showCloseButton = true,
 }) => {
   const [visible, setVisible] = useState(false);
 
@@ -136,36 +138,38 @@ const Modal: React.FC<ModalProps> = ({
             >
               {title}
             </h2>
-            <button
-              onClick={onClose}
-              style={{
-                padding: '0.5rem',
-                borderRadius: '0.75rem',
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                color: '#9ca3af',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'background-color 200ms, color 200ms',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#f3f4f6';
-                e.currentTarget.style.color = '#111827';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = '#9ca3af';
-              }}
-            >
-              <X style={{ width: '1.25rem', height: '1.25rem' }} />
-            </button>
+            {showCloseButton && (
+              <button
+                onClick={onClose}
+                style={{
+                  padding: '0.5rem',
+                  borderRadius: '0.75rem',
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  color: '#9ca3af',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'background-color 200ms, color 200ms',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f3f4f6';
+                  e.currentTarget.style.color = '#111827';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.color = '#9ca3af';
+                }}
+              >
+                <X style={{ width: '1.25rem', height: '1.25rem' }} />
+              </button>
+            )}
           </div>
         )}
 
         {/* Close Button UI when no header - small absolute button */}
-        {!title && (
+        {!title && showCloseButton && (
           <button
             onClick={onClose}
             style={{

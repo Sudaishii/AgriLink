@@ -9,21 +9,27 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const database_1 = require("../database/database");
 const webTemplates_1 = require("../templates/webTemplates");
 const systemLogService_1 = require("../services/systemLogService");
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const normalizeEmail = (value) => String(value ?? '').trim().toLowerCase();
 const registerController = async (req, res) => {
     try {
         const { email, password, firstName, lastName, role_name, city, province } = req.body;
-        if (!email || !password || !role_name) {
+        const normalizedEmail = normalizeEmail(email);
+        if (!normalizedEmail || !password || !role_name) {
             return res.status(400).json({ message: 'Email, password, and role are required' });
         }
-        const result = await (0, authService_1.registerUser)({ email, password, firstName, lastName, role_name, city, province });
+        if (!EMAIL_REGEX.test(normalizedEmail)) {
+            return res.status(400).json({ message: 'Please enter a valid email address' });
+        }
+        const result = await (0, authService_1.registerUser)({ email: normalizedEmail, password, firstName, lastName, role_name, city, province });
         // System log: new user registration
         (0, systemLogService_1.writeLog)({
-            user_name: `${firstName || ''} ${lastName || ''}`.trim() || email,
+            user_name: `${firstName || ''} ${lastName || ''}`.trim() || normalizedEmail,
             user_role: role_name || 'buyer',
             action: 'New User Registered',
             event_type: 'register',
             module: 'Authentication',
-            detail: `Account created for ${email} with role "${role_name}"`,
+            detail: `Account created for ${normalizedEmail} with role "${role_name}"`,
             category: 'User',
             severity: 'info',
             ip_address: req.ip || '127.0.0.1',
@@ -84,11 +90,14 @@ const updatePasswordController = async (req, res) => {
 exports.updatePasswordController = updatePasswordController;
 const checkEmailController = async (req, res) => {
     try {
-        const { email } = req.query;
-        if (!email) {
+        const normalizedEmail = normalizeEmail(req.query.email);
+        if (!normalizedEmail) {
             return res.status(400).json({ message: 'Email is required' });
         }
-        const [existing] = await database_1.db.execute('SELECT id FROM auth_table WHERE email = ?', [email]);
+        if (!EMAIL_REGEX.test(normalizedEmail)) {
+            return res.status(400).json({ message: 'Please enter a valid email address' });
+        }
+        const [existing] = await database_1.db.execute('SELECT id FROM auth_table WHERE email = ?', [normalizedEmail]);
         return res.status(200).json({ exists: existing.length > 0 });
     }
     catch (err) {
@@ -137,19 +146,23 @@ exports.verifyController = verifyController;
 const loginController = async (req, res) => {
     try {
         const { email, password } = req.body;
-        if (!email || !password) {
+        const normalizedEmail = normalizeEmail(email);
+        if (!normalizedEmail || !password) {
             return res.status(400).json({ message: 'Email and password are required' });
         }
-        const result = await (0, authService_1.loginUser)({ email, password });
+        if (!EMAIL_REGEX.test(normalizedEmail)) {
+            return res.status(400).json({ message: 'Please enter a valid email address' });
+        }
+        const result = await (0, authService_1.loginUser)({ email: normalizedEmail, password });
         // System log: successful login
         (0, systemLogService_1.writeLog)({
             user_id: result.id,
-            user_name: `${result.first_name || ''} ${result.last_name || ''}`.trim() || email,
+            user_name: `${result.first_name || ''} ${result.last_name || ''}`.trim() || normalizedEmail,
             user_role: result.role_name || 'user',
             action: 'User Login',
             event_type: 'login',
             module: 'Authentication',
-            detail: `Successful login for ${email}`,
+            detail: `Successful login for ${normalizedEmail}`,
             category: 'Security',
             severity: 'info',
             ip_address: req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '127.0.0.1',
@@ -239,13 +252,16 @@ const logoutController = async (req, res) => {
 exports.logoutController = logoutController;
 const forgotPasswordController = async (req, res) => {
     try {
-        const { email } = req.body;
-        if (!email)
+        const normalizedEmail = normalizeEmail(req.body?.email);
+        if (!normalizedEmail)
             return res.status(400).json({ message: 'Email is required' });
-        await (0, authService_1.forgotPassword)(email);
+        if (!EMAIL_REGEX.test(normalizedEmail)) {
+            return res.status(400).json({ message: 'Please enter a valid email address' });
+        }
+        await (0, authService_1.forgotPassword)(normalizedEmail);
         // Audit Log
         (0, systemLogService_1.writeLog)({
-            user_name: email,
+            user_name: normalizedEmail,
             user_role: 'anonymous',
             action: 'Password Reset Requested',
             event_type: 'security',

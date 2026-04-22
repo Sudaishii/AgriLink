@@ -35,6 +35,7 @@ import CartPage from './components/pages/Buyer/CartPage';
 import BuyerPublicProfilePage from './components/pages/Buyer/BuyerPublicProfilePage';
 import MapPage from './components/pages/MapPage';
 import AboutPage from './components/pages/AboutPage';
+import LegalPage from './components/pages/LegalPage';
 import BrgyDashboard from './components/pages/Brgy/BrgyDashboard';
 import BrgyListingsPage from './components/pages/Brgy/BrgyListingsPage';
 import OnboardingModal from './components/modals/OnboardingModal';
@@ -159,6 +160,7 @@ const AppContent: React.FC = () => {
       '/messages': 'Messages | AgriLink',
       '/notifications': 'Activities | AgriLink',
       '/about': 'About Us | AgriLink',
+      '/legal': 'Terms & Privacy | AgriLink',
     };
     if (location.pathname.startsWith('/profile/buyer/')) {
       document.title = 'Buyer Profile | AgriLink';
@@ -349,7 +351,7 @@ const AppContent: React.FC = () => {
           isOpen={showOnboarding}
           onClose={() => setShowOnboarding(false)}
           userId={localStorage.getItem('agrilink_id') || ''}
-          userName={firstName}
+          userName={`${firstName} ${lastName}`.trim() || firstName}
           userType={userType}
           onComplete={() => setShowOnboarding(false)}
         />
@@ -386,6 +388,7 @@ const AppContent: React.FC = () => {
             <Routes location={location} key={`${location.pathname}${location.search}`}>
               <Route path="/" element={isLoggedIn ? <Navigate to={homeRoute} replace /> : <LandingPage />} />
               <Route path="/about" element={<AboutPage />} />
+              <Route path="/legal" element={<LegalPage />} />
               <Route
                 path="/login"
                 element={
@@ -461,8 +464,16 @@ const AppContent: React.FC = () => {
                     <li>
                       <button onClick={() => navigate('/about')} className="hover:text-white transition-colors cursor-pointer">About Us</button>
                     </li>
-                    <li><a href="#" className="hover:text-white transition-colors">How It Works</a></li>
-                    <li><a href="#" className="hover:text-white transition-colors">Support</a></li>
+                    <li>
+                      <button onClick={() => navigate('/legal#terms')} className="hover:text-white transition-colors cursor-pointer">
+                        Terms & Agreement
+                      </button>
+                    </li>
+                    <li>
+                      <button onClick={() => navigate('/legal#privacy')} className="hover:text-white transition-colors cursor-pointer">
+                        Privacy Policy
+                      </button>
+                    </li>
                   </ul>
                 </div>
                 <div>

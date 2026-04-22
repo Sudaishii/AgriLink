@@ -15,9 +15,17 @@ import {
 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import { API_BASE_URL } from '../../api/apiConfig';
+import { MINGLANILLA_BARANGAYS } from '../../constants/barangays';
 
 const mapStyle = 'mapbox://styles/mapbox/streets-v11';
 const CEBU_PROVINCE = 'Cebu';
+const MINGLANILLA_NAME = 'Minglanilla';
+const MINGLANILLA_BOUNDS = {
+  minLatitude: 10.17,
+  maxLatitude: 10.30,
+  minLongitude: 123.72,
+  maxLongitude: 123.86,
+};
 const CEBU_MUNICIPALITY_COORDS: Record<string, { latitude: number; longitude: number }> = {
   alcantara: { latitude: 9.9773, longitude: 123.4099 },
   alcoy: { latitude: 9.7248, longitude: 123.4891 },
@@ -75,6 +83,12 @@ const CEBU_MUNICIPALITY_COORDS: Record<string, { latitude: number; longitude: nu
   tudela: { latitude: 10.6114, longitude: 124.4736 },
 };
 
+const isWithinMinglanillaBounds = (latitude: number, longitude: number) =>
+  latitude >= MINGLANILLA_BOUNDS.minLatitude &&
+  latitude <= MINGLANILLA_BOUNDS.maxLatitude &&
+  longitude >= MINGLANILLA_BOUNDS.minLongitude &&
+  longitude <= MINGLANILLA_BOUNDS.maxLongitude;
+
 interface OnboardingModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -87,15 +101,23 @@ interface OnboardingModalProps {
 const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, userId, userName, userType, onComplete }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<{
+    phone?: string;
+    zip_code?: string;
+    city?: string;
+    farm_barangay?: string;
+    farm_pin?: string;
+  }>({});
+  const [farmPinSet, setFarmPinSet] = useState(false);
   const toast = useToast();
   const isFarmer = userType.toLowerCase() === 'farmer';
   const defaultCity = isFarmer ? 'Minglanilla' : '';
-  const defaultProvince = CEBU_PROVINCE;
+  const defaultProvince = isFarmer ? CEBU_PROVINCE : '';
   const defaultZipCode = isFarmer ? '6046' : '';
 
   const [formData, setFormData] = useState({
     phone: '',
-    address: '', // This will store Barangay/Landmark
+    address: isFarmer ? MINGLANILLA_BARANGAYS[0] : '', // This will store Barangay/Landmark
     city: defaultCity,
     province: defaultProvince,
     zip_code: defaultZipCode,
@@ -109,7 +131,11 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
     farm_zip_code: defaultZipCode,
     farm_latitude: 10.245,
     farm_longitude: 123.792,
-    farm_address_same_as_home: true
+    farm_address_same_as_home: true,
+    farm_barangay: isFarmer ? MINGLANILLA_BARANGAYS[0] : '',
+    farm_landmark: '',
+    home_barangay: isFarmer ? MINGLANILLA_BARANGAYS[0] : '',
+    home_landmark: '',
   });
 
   const [viewState, setViewState] = useState({
@@ -124,21 +150,84 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
     zoom: 13
   });
 
+  const composeLandmarkBarangay = (landmark: string, barangay: string) =>
+    landmark.trim() ? `${landmark.trim()}, ${barangay}` : barangay;
+
+  // If role state was previously farmer in-app, clear farmer defaults for buyer onboarding.
+  useEffect(() => {
+    if (!isOpen || isFarmer) return;
+
+    setFormData(prev => {
+      const looksLikeFarmerDefaults =
+        prev.city === MINGLANILLA_NAME &&
+        prev.province === CEBU_PROVINCE &&
+        prev.zip_code === '6046';
+
+      if (!looksLikeFarmerDefaults) return prev;
+
+      return {
+        ...prev,
+        city: '',
+        province: '',
+        zip_code: '',
+        farm_city: '',
+        farm_province: '',
+        farm_zip_code: '',
+        home_barangay: '',
+        home_landmark: '',
+        farm_barangay: '',
+        farm_landmark: '',
+      };
+    });
+  }, [isOpen, isFarmer]);
+
   const handleNext = () => {
     if (step === 2) {
       const digitsOnlyPhone = formData.phone.replace(/\D/g, '');
-      if (digitsOnlyPhone.length !== 11) {
-        toast.error('Mobile number must be exactly 11 digits.');
-        return;
+      const newErrors: { phone?: string; zip_code?: string; city?: string } = {};
+
+      if (!digitsOnlyPhone) {
+        newErrors.phone = 'Mobile number is required.';
+      } else if (digitsOnlyPhone.length !== 11) {
+        newErrors.phone = 'Mobile number must be exactly 11 digits.';
       }
       if (!formData.zip_code.trim()) {
-        toast.error('ZIP code is required.');
-        return;
+        newErrors.zip_code = 'ZIP code is required.';
       }
       if (!formData.city.trim()) {
-        toast.error('City / Municipality is required.');
+        newErrors.city = 'City / Municipality is required.';
+      }
+
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
         return;
       }
+
+      setErrors({});
+    }
+    if (isFarmer && step === 4) {
+      const newErrors: {
+        farm_barangay?: string;
+        farm_pin?: string;
+      } = {};
+
+      if (!formData.farm_address_same_as_home) {
+        if (!formData.farm_barangay.trim()) {
+          newErrors.farm_barangay = 'Please select your farm barangay.';
+        }
+
+        const hasFarmPin = farmPinSet && isWithinMinglanillaBounds(formData.farm_latitude, formData.farm_longitude);
+        if (!hasFarmPin) {
+          newErrors.farm_pin = 'Please pin your farm location on the map.';
+        }
+      }
+
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(prev => ({ ...prev, ...newErrors }));
+        return;
+      }
+
+      setErrors(prev => ({ ...prev, farm_barangay: undefined, farm_pin: undefined }));
     }
     setStep(prev => prev + 1);
   };
@@ -147,8 +236,17 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
   const handleSubmit = async () => {
     const digitsOnlyPhone = formData.phone.replace(/\D/g, '');
     if (digitsOnlyPhone.length !== 11) {
-      toast.error('Mobile number must be exactly 11 digits.');
+      setErrors({ phone: 'Mobile number must be exactly 11 digits.' });
+      setStep(2);
       return;
+    }
+    if (isFarmer && !formData.farm_address_same_as_home) {
+      const hasFarmPin = farmPinSet && isWithinMinglanillaBounds(formData.farm_latitude, formData.farm_longitude);
+      if (!hasFarmPin) {
+        setErrors(prev => ({ ...prev, farm_pin: 'Please pin your farm location on the map.' }));
+        setStep(4);
+        return;
+      }
     }
 
     setLoading(true);
@@ -170,14 +268,16 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
           phone: digitsOnlyPhone,
           address: formData.address,
           city: formData.city,
-          province: CEBU_PROVINCE,
+          province: isFarmer ? CEBU_PROVINCE : formData.province,
           zip_code: formData.zip_code,
           latitude: formData.latitude,
           longitude: formData.longitude,
           // Farm fields
-          farm_address: formData.farm_address_same_as_home ? formData.address : formData.farm_address,
+          farm_address: formData.farm_address_same_as_home
+            ? formData.address
+            : composeLandmarkBarangay(formData.farm_landmark, formData.farm_barangay),
           farm_city: formData.farm_city,
-          farm_province: CEBU_PROVINCE,
+          farm_province: isFarmer ? CEBU_PROVINCE : formData.farm_province,
           farm_zip_code: formData.farm_zip_code,
           farm_latitude: formData.farm_address_same_as_home ? formData.latitude : formData.farm_latitude,
           farm_longitude: formData.farm_address_same_as_home ? formData.longitude : formData.farm_longitude,
@@ -205,21 +305,21 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
 
   // 🚜 Auto-Sync coordinates if same as home
   useEffect(() => {
-    if (formData.province !== CEBU_PROVINCE || formData.farm_province !== CEBU_PROVINCE) {
+    if (isFarmer && (formData.province !== CEBU_PROVINCE || formData.farm_province !== CEBU_PROVINCE)) {
       setFormData(prev => ({
         ...prev,
         province: CEBU_PROVINCE,
         farm_province: CEBU_PROVINCE
       }));
     }
-  }, [formData.province, formData.farm_province]);
+  }, [formData.province, formData.farm_province, isFarmer]);
 
   // Re-center home pin map based on entered city/municipality
   useEffect(() => {
     const rawCity = formData.city.trim().toLowerCase();
     if (!rawCity) return;
     const cityKey = rawCity.replace(/\s+/g, '');
-    const localMatch = CEBU_MUNICIPALITY_COORDS[rawCity] || CEBU_MUNICIPALITY_COORDS[cityKey];
+    const localMatch = isFarmer ? (CEBU_MUNICIPALITY_COORDS[rawCity] || CEBU_MUNICIPALITY_COORDS[cityKey]) : null;
 
     if (localMatch) {
       setViewState(prev => ({ ...prev, latitude: localMatch.latitude, longitude: localMatch.longitude, zoom: 13 }));
@@ -235,7 +335,11 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
 
     const loadMunicipalityCenter = async () => {
       try {
-        const query = encodeURIComponent(`${formData.city}, Cebu, Philippines`);
+        const query = encodeURIComponent(
+          isFarmer
+            ? `${formData.city}, Cebu, Philippines`
+            : `${formData.city}, Philippines`
+        );
         const response = await fetch(
           `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?limit=1&access_token=${token}`,
           { signal: controller.signal }
@@ -259,7 +363,52 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
       controller.abort();
       clearTimeout(timeout);
     };
-  }, [formData.city]);
+  }, [formData.city, isFarmer]);
+
+  // Reposition home pin based on typed landmark/home address
+  useEffect(() => {
+    const token = import.meta.env.VITE_MAPBOX_TOKEN;
+    const rawAddress = formData.address.trim();
+    const rawCity = formData.city.trim() || (isFarmer ? MINGLANILLA_NAME : '');
+
+    if (!token || !rawAddress) return;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const debounce = setTimeout(async () => {
+      try {
+        const query = encodeURIComponent(
+          isFarmer
+            ? `${rawAddress}, ${rawCity}, Cebu, Philippines`
+            : `${rawAddress}${rawCity ? `, ${rawCity}` : ''}, Philippines`
+        );
+        const response = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?limit=1&access_token=${token}`,
+          { signal: controller.signal }
+        );
+        if (!response.ok) return;
+        const data = await response.json();
+        const [lng, lat] = data?.features?.[0]?.center || [];
+        if (typeof lat === 'number' && typeof lng === 'number') {
+          if (isFarmer && !isWithinMinglanillaBounds(lat, lng)) {
+            return;
+          }
+          setViewState(prev => ({ ...prev, latitude: lat, longitude: lng, zoom: Math.max(prev.zoom, 14) }));
+          setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }));
+        }
+      } catch {
+        // Keep current pin if geocoding fails.
+      } finally {
+        clearTimeout(timeout);
+      }
+    }, 600);
+
+    return () => {
+      clearTimeout(debounce);
+      controller.abort();
+      clearTimeout(timeout);
+    };
+  }, [formData.address, formData.city, isFarmer]);
 
   useEffect(() => {
     if (formData.farm_address_same_as_home) {
@@ -267,8 +416,11 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
         ...prev,
         farm_latitude: prev.latitude,
         farm_longitude: prev.longitude,
-        farm_address: prev.address
+        farm_address: prev.address,
+        farm_barangay: prev.home_barangay || prev.farm_barangay,
+        farm_landmark: prev.home_landmark || prev.farm_landmark
       }));
+      setFarmPinSet(true);
       setFarmViewState(prev => ({
         ...prev,
         latitude: viewState.latitude,
@@ -276,6 +428,51 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
       }));
     }
   }, [formData.farm_address_same_as_home, formData.latitude, formData.longitude, formData.address, viewState.latitude, viewState.longitude]);
+
+  // Reposition farm pin based on typed farm address
+  useEffect(() => {
+    if (formData.farm_address_same_as_home) return;
+
+    const token = import.meta.env.VITE_MAPBOX_TOKEN;
+    const rawFarmAddress = formData.farm_address.trim();
+    const rawFarmCity = (formData.farm_city || formData.city || 'Cebu').trim();
+
+    if (!token || !rawFarmAddress) return;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const debounce = setTimeout(async () => {
+      try {
+        const query = encodeURIComponent(`${rawFarmAddress}, ${rawFarmCity}, Cebu, Philippines`);
+        const response = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?limit=1&access_token=${token}`,
+          { signal: controller.signal }
+        );
+        if (!response.ok) return;
+        const data = await response.json();
+        const [lng, lat] = data?.features?.[0]?.center || [];
+        if (typeof lat === 'number' && typeof lng === 'number') {
+          if (isFarmer && !isWithinMinglanillaBounds(lat, lng)) {
+            return;
+          }
+          setFarmViewState(prev => ({ ...prev, latitude: lat, longitude: lng, zoom: Math.max(prev.zoom, 14) }));
+          setFormData(prev => ({ ...prev, farm_latitude: lat, farm_longitude: lng }));
+          setFarmPinSet(true);
+          setErrors(prev => ({ ...prev, farm_pin: undefined }));
+        }
+      } catch {
+        // Keep current farm pin if geocoding fails.
+      } finally {
+        clearTimeout(timeout);
+      }
+    }, 600);
+
+    return () => {
+      clearTimeout(debounce);
+      controller.abort();
+      clearTimeout(timeout);
+    };
+  }, [formData.farm_address, formData.farm_city, formData.city, formData.farm_address_same_as_home, isFarmer]);
 
   const buyerSteps = [
     { title: 'Welcome', icon: <User className="w-6 h-6" /> },
@@ -300,6 +497,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
       onClose={() => {}} 
       title=""
       size="3xl"
+      showCloseButton={false}
     >
       <div className="py-4 font-sans">
         {/* Progress Bar */}
@@ -372,9 +570,11 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
                       onChange={(e) => {
                         const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 11);
                         setFormData({ ...formData, phone: digitsOnly });
+                        if (errors.phone) setErrors(prev => ({ ...prev, phone: undefined }));
                       }}
                     />
                   </div>
+                  {errors.phone && <p className="text-red-500 text-xs font-semibold mt-1 ml-1">{errors.phone}</p>}
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">ZIP Code</label>
@@ -386,8 +586,12 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
                       isFarmer ? 'text-gray-500 cursor-not-allowed' : 'focus:border-[#5ba409]'
                     }`}
                     value={formData.zip_code}
-                    onChange={(e) => setFormData({ ...formData, zip_code: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, zip_code: e.target.value });
+                      if (errors.zip_code) setErrors(prev => ({ ...prev, zip_code: undefined }));
+                    }}
                   />
+                  {errors.zip_code && <p className="text-red-500 text-xs font-semibold mt-1 ml-1">{errors.zip_code}</p>}
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">City / Municipality</label>
@@ -399,23 +603,32 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
                       isFarmer ? 'text-gray-500 cursor-not-allowed' : 'focus:border-[#5ba409]'
                     }`}
                     value={formData.city}
-                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, city: e.target.value });
+                      if (errors.city) setErrors(prev => ({ ...prev, city: undefined }));
+                    }}
                   />
+                  {errors.city && <p className="text-red-500 text-xs font-semibold mt-1 ml-1">{errors.city}</p>}
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Province</label>
                   <input
                     type="text"
-                    disabled
-                    className="w-full px-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl outline-none font-bold transition-all text-gray-500 cursor-not-allowed"
+                    placeholder="e.g. Cebu"
+                    disabled={isFarmer}
+                    className={`w-full px-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl outline-none font-bold transition-all ${
+                      isFarmer ? 'text-gray-500 cursor-not-allowed' : 'focus:border-[#5ba409]'
+                    }`}
                     value={formData.province}
-                    onChange={() => {}}
+                    onChange={(e) => setFormData({ ...formData, province: e.target.value })}
                   />
                 </div>
               </div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-[#5ba409]">
-                Province is fixed to Cebu.
-              </p>
+              {isFarmer && (
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#5ba409]">
+                  Province is fixed to Cebu.
+                </p>
+              )}
             </div>
           )}
 
@@ -423,20 +636,68 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
               <div className="mb-4">
                 <h2 className="text-2xl font-black text-gray-900">Home Location</h2>
-                <p className="text-gray-500">Enter your Barangay and pin your exact location below.</p>
+                <p className="text-gray-500">
+                  {isFarmer
+                    ? 'Select your Minglanilla barangay and home landmark, then pin your exact location below.'
+                    : 'Enter your home landmark address and pin your exact location below.'}
+                </p>
               </div>
 
               <div className="space-y-4">
-                <div className="relative">
-                  <MapPin className="absolute left-4 top-4 text-gray-400 w-5 h-5" />
-                  <textarea
-                    placeholder="Barangay & Landmark (e.g., Brgy. Ward 1, Near Church)"
-                    rows={2}
-                    className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-transparent focus:border-[#5ba409] rounded-2xl outline-none font-bold transition-all resize-none"
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  />
-                </div>
+                {isFarmer ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Barangay (Minglanilla)</label>
+                      <select
+                        className="w-full px-4 py-4 bg-gray-50 border-2 border-transparent focus:border-[#5ba409] rounded-2xl outline-none font-bold transition-all"
+                        value={formData.home_barangay}
+                        onChange={(e) => {
+                          const nextBarangay = e.target.value;
+                          const composed = composeLandmarkBarangay(formData.home_landmark, nextBarangay);
+                          setFormData(prev => ({
+                            ...prev,
+                            home_barangay: nextBarangay,
+                            address: composed
+                          }));
+                        }}
+                      >
+                        {MINGLANILLA_BARANGAYS.map((barangay) => (
+                          <option key={barangay} value={barangay}>{barangay}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Landmark</label>
+                      <input
+                        type="text"
+                        placeholder="e.g., Near Church"
+                        className="w-full px-4 py-4 bg-gray-50 border-2 border-transparent focus:border-[#5ba409] rounded-2xl outline-none font-bold transition-all"
+                        value={formData.home_landmark}
+                        onChange={(e) => {
+                          const nextLandmark = e.target.value;
+                          const composed = composeLandmarkBarangay(nextLandmark, formData.home_barangay);
+                          setFormData(prev => ({
+                            ...prev,
+                            home_landmark: nextLandmark,
+                            address: composed
+                          }));
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <MapPin className="absolute left-4 top-4 text-gray-400 w-5 h-5" />
+                    <textarea
+                      placeholder="Home Landmark Address (e.g., Brgy. Ward 1, Near Church)"
+                      rows={2}
+                      className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-transparent focus:border-[#5ba409] rounded-2xl outline-none font-bold transition-all resize-none"
+                      value={formData.address}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    />
+                  </div>
+                )}
 
                 <div className="w-full h-[250px] rounded-3xl overflow-hidden border-2 border-gray-100 relative group">
                   <MapBoxMap
@@ -444,8 +705,16 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
                     onMove={evt => setViewState(evt.viewState)}
                     mapStyle={mapStyle}
                     mapboxAccessToken={import.meta.env.VITE_MAPBOX_TOKEN || ''}
+                    maxBounds={isFarmer ? [
+                      [MINGLANILLA_BOUNDS.minLongitude, MINGLANILLA_BOUNDS.minLatitude],
+                      [MINGLANILLA_BOUNDS.maxLongitude, MINGLANILLA_BOUNDS.maxLatitude]
+                    ] : undefined}
                     style={{width: '100%', height: '100%'}}
                     onClick={(e) => {
+                      if (isFarmer && !isWithinMinglanillaBounds(e.lngLat.lat, e.lngLat.lng)) {
+                        toast.error('Please pin your location within Minglanilla only.');
+                        return;
+                      }
                       setFormData(prev => ({
                         ...prev,
                         latitude: e.lngLat.lat,
@@ -485,22 +754,66 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
                     type="checkbox"
                     className="hidden"
                     checked={formData.farm_address_same_as_home}
-                    onChange={(e) => setFormData({ ...formData, farm_address_same_as_home: e.target.checked })}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setFormData(prev => ({
+                        ...prev,
+                        farm_address_same_as_home: checked,
+                        farm_address: checked
+                          ? prev.address
+                          : (prev.farm_landmark.trim() ? `${prev.farm_barangay}, ${prev.farm_landmark.trim()}` : prev.farm_barangay)
+                      }));
+                      setFarmPinSet(checked);
+                      setErrors(prev => ({ ...prev, farm_barangay: undefined, farm_pin: undefined }));
+                    }}
                   />
                   <span className="font-black text-xs uppercase tracking-widest text-[#5ba409]">Farm is at the same location as my home</span>
                 </label>
 
                 {!formData.farm_address_same_as_home && (
                   <div className="space-y-6 animate-in slide-in-from-top-4 duration-500">
-                    <div className="relative">
-                      <MapPin className="absolute left-4 top-4 text-gray-400 w-5 h-5" />
-                      <textarea
-                        placeholder="Farm Barangay & Landmark"
-                        rows={2}
-                        className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-transparent focus:border-[#5ba409] rounded-2xl outline-none font-bold transition-all resize-none text-sm"
-                        value={formData.farm_address}
-                        onChange={(e) => setFormData({ ...formData, farm_address: e.target.value })}
-                      />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Farm Barangay (Minglanilla)</label>
+                        <select
+                          className="w-full px-4 py-4 bg-gray-50 border-2 border-transparent focus:border-[#5ba409] rounded-2xl outline-none font-bold transition-all"
+                          value={formData.farm_barangay}
+                          onChange={(e) => {
+                        const nextBarangay = e.target.value;
+                        const composed = composeLandmarkBarangay(formData.farm_landmark, nextBarangay);
+                            setFormData(prev => ({
+                              ...prev,
+                              farm_barangay: nextBarangay,
+                              farm_address: composed
+                            }));
+                            if (errors.farm_barangay) setErrors(prev => ({ ...prev, farm_barangay: undefined }));
+                          }}
+                        >
+                          {MINGLANILLA_BARANGAYS.map((barangay) => (
+                            <option key={barangay} value={barangay}>{barangay}</option>
+                          ))}
+                        </select>
+                        {errors.farm_barangay && <p className="text-red-500 text-xs font-semibold mt-1 ml-1">{errors.farm_barangay}</p>}
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Farm Landmark</label>
+                        <input
+                          type="text"
+                          placeholder="e.g., Near River"
+                          className="w-full px-4 py-4 bg-gray-50 border-2 border-transparent focus:border-[#5ba409] rounded-2xl outline-none font-bold transition-all"
+                          value={formData.farm_landmark}
+                          onChange={(e) => {
+                            const nextLandmark = e.target.value;
+                            const composed = composeLandmarkBarangay(nextLandmark, formData.farm_barangay);
+                            setFormData(prev => ({
+                              ...prev,
+                              farm_landmark: nextLandmark,
+                              farm_address: composed
+                            }));
+                          }}
+                        />
+                      </div>
                     </div>
 
                     <div className="w-full h-[200px] rounded-3xl overflow-hidden border-2 border-gray-100 relative group">
@@ -509,14 +822,24 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
                         onMove={evt => setFarmViewState(evt.viewState)}
                         mapStyle={mapStyle}
                         mapboxAccessToken={import.meta.env.VITE_MAPBOX_TOKEN || ''}
+                        maxBounds={isFarmer ? [
+                          [MINGLANILLA_BOUNDS.minLongitude, MINGLANILLA_BOUNDS.minLatitude],
+                          [MINGLANILLA_BOUNDS.maxLongitude, MINGLANILLA_BOUNDS.maxLatitude]
+                        ] : undefined}
                         style={{width: '100%', height: '100%'}}
                         onClick={(e) => {
                           if (formData.farm_address_same_as_home) return;
+                          if (isFarmer && !isWithinMinglanillaBounds(e.lngLat.lat, e.lngLat.lng)) {
+                            setErrors(prev => ({ ...prev, farm_pin: 'Farm location must be within Minglanilla.' }));
+                            return;
+                          }
                           setFormData(prev => ({
                             ...prev,
                             farm_latitude: e.lngLat.lat,
                             farm_longitude: e.lngLat.lng,
                           }));
+                          setFarmPinSet(true);
+                          setErrors(prev => ({ ...prev, farm_pin: undefined }));
                         }}
                       >
                         <Marker longitude={formData.farm_longitude} latitude={formData.farm_latitude} anchor="bottom">
@@ -526,6 +849,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
                         </Marker>
                       </MapBoxMap>
                     </div>
+                    {errors.farm_pin && <p className="text-red-500 text-xs font-semibold -mt-3 ml-1">{errors.farm_pin}</p>}
                   </div>
                 )}
 
@@ -571,7 +895,11 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
                   </div>
                   <div>
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Base Location</p>
-                    <p className="font-bold text-gray-900">{formData.address}, {formData.city}, {formData.province}</p>
+                    <p className="font-bold text-gray-900">
+                      {isFarmer
+                        ? `${composeLandmarkBarangay(formData.home_landmark, formData.home_barangay)}, ${formData.city}, ${formData.province}`
+                        : `${formData.address}, ${formData.city}, ${formData.province}`}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -581,11 +909,11 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
 
         {/* Footer Actions */}
         <div className="flex gap-4 mt-12">
-          {step > 1 && step < steps.length && (
+          {step > 1 && (
             <button
               onClick={handleBack}
               disabled={loading}
-              className="px-8 py-5 bg-white text-gray-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-50 transition-all flex items-center gap-2 border border-gray-100"
+              className="px-8 py-4 bg-white text-gray-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-50 transition-all flex items-center gap-2 border border-gray-100"
             >
               <ArrowLeft className="w-4 h-4" /> Back
             </button>
@@ -594,7 +922,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
           {step < steps.length ? (
             <button
               onClick={handleNext}
-              className="flex-1 py-5 bg-gray-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-2"
+              className="flex-1 py-4 bg-[#5ba409] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-green-500/20 hover:bg-[#4d8f08] transition-all flex items-center justify-center gap-2"
             >
               Continue <ArrowRight className="w-4 h-4" />
             </button>
@@ -602,7 +930,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, user
             <button
               onClick={handleSubmit}
               disabled={loading}
-              className="flex-1 py-5 bg-[#5ba409] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-green-500/20 hover:bg-[#4d8f08] transition-all flex items-center justify-center gap-2"
+              className="flex-1 py-4 bg-[#5ba409] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-green-500/20 hover:bg-[#4d8f08] transition-all flex items-center justify-center gap-2"
             >
               {loading ? 'Finalizing Profile...' : 'Complete Registration'} 
             </button>

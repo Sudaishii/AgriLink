@@ -31,6 +31,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onLogin }) => {
   const [errors, setErrors] = useState<Partial<RegisterFormData>>({});
   const [isEmailAvailable, setIsEmailAvailable] = useState<boolean | null>(null);
   const [isCheckingEmail, setIsCheckingEmail] = useState<boolean>(false);
+  const [activeLegalModal, setActiveLegalModal] = useState<'terms' | 'privacy' | null>(null);
 
   useEffect(() => {
     const role = queryParams.get('role');
@@ -98,10 +99,14 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onLogin }) => {
 
     // 1️⃣ Local validation
     const newErrors: Partial<RegisterFormData> = {};
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!formData.firstName) newErrors.firstName = 'First name is required' as any;
     if (!formData.lastName) newErrors.lastName = 'Last name is required' as any;
     if (!formData.email) newErrors.email = 'Email is required' as any;
+    if (formData.email && !emailRegex.test(formData.email.trim())) {
+      newErrors.email = 'Please input a valid email format' as any;
+    }
     if (!formData.password) newErrors.password = 'Password is required' as any;
     if (formData.password && formData.password.length < 8) {
       newErrors.password = 'Password must be at least 8 characters' as any;
@@ -124,7 +129,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onLogin }) => {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          email: formData.email,
+          email: formData.email.trim().toLowerCase(),
           password: formData.password,
           firstName: formData.firstName,
           lastName: formData.lastName,
@@ -439,11 +444,27 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onLogin }) => {
                 />
                 <label className="text-sm text-gray-600 font-medium leading-relaxed cursor-pointer group-hover:text-gray-900 transition-colors">
                   I agree to the{' '}
-                  <button type="button" className="font-bold text-[#5ba409] hover:underline cursor-pointer">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setActiveLegalModal('terms');
+                    }}
+                    className="font-bold text-[#5ba409] hover:underline cursor-pointer"
+                  >
                     Terms of Service
                   </button>{' '}
                   and{' '}
-                  <button type="button" className="font-bold text-[#5ba409] hover:underline cursor-pointer">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setActiveLegalModal('privacy');
+                    }}
+                    className="font-bold text-[#5ba409] hover:underline cursor-pointer"
+                  >
                     Privacy Policy
                   </button>
                 </label>
@@ -474,6 +495,65 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onLogin }) => {
           </div>
         </div>
       </div>
+
+      {activeLegalModal && (
+        <div
+          className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setActiveLegalModal(null)}
+        >
+          <div
+            className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-3xl bg-white border border-[#d9e8c8] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-5 border-b border-slate-200 sticky top-0 bg-white z-10">
+              <h3 className="text-xl font-black text-slate-900">
+                {activeLegalModal === 'terms' ? 'Terms & Agreement' : 'Privacy Policy'}
+              </h3>
+              <p className="mt-1 text-xs font-semibold uppercase tracking-widest text-[#5ba409]">AgriLink Legal</p>
+            </div>
+
+            <div className="px-6 py-5 space-y-4 text-sm text-slate-700 leading-relaxed">
+              {activeLegalModal === 'terms' ? (
+                <>
+                  <p>
+                    By creating an account and using AgriLink, you agree to provide accurate information and use the
+                    system responsibly. Farmers must ensure that all crop listings are truthful, while buyers must
+                    conduct transactions in good faith. All accounts and listings are subject to verification by
+                    barangay officials.
+                  </p>
+                  <p>
+                    AgriLink only serves as a platform connecting farmers and buyers and is not responsible for
+                    transaction outcomes. Any misuse, fraudulent activity, or unauthorized access may result in account
+                    suspension or removal.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p>
+                    AgriLink collects basic personal and crop information to manage your account, support
+                    transactions, and verify listings. Your data is kept secure and will only be accessed by
+                    authorized personnel, such as barangay officials for verification purposes.
+                  </p>
+                  <p>
+                    We do not share your information with third parties without your consent, unless required by law.
+                    By using the system, you agree to the collection and use of your data as described.
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setActiveLegalModal(null)}
+                className="px-5 py-2 rounded-xl bg-[#5ba409] text-white text-xs font-black uppercase tracking-[0.14em] hover:bg-[#4d8f08] transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

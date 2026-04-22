@@ -1000,16 +1000,16 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
   const heroStyle: React.CSSProperties =
     isFarmer && profile.farmImage
       ? {
-        backgroundImage: `linear-gradient(to right, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.45)), url(${getFullImageUrl(profile.farmImage)})`,
+        backgroundImage: `linear-gradient(120deg, rgba(26, 48, 7, 0.86), rgba(58, 97, 10, 0.48), rgba(94, 145, 16, 0.34)), url(${getFullImageUrl(profile.farmImage)})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
       }
       : isFarmer
         ? {
-          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+          background: 'linear-gradient(135deg, #294a06 0%, #3f6f08 52%, #5a8c0d 100%)',
         }
         : {
-          background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)',
+          background: 'linear-gradient(135deg, #2f5507 0%, #4a7d08 55%, #629812 100%)',
         };
 
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(' ').trim() || 'Your Name';
