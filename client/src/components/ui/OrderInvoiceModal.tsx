@@ -6,6 +6,7 @@ import { getFullImageUrl } from '../../api/apiConfig';
 type OrderLike = {
   req_id?: number | string;
   req_status?: string;
+  decline_reason?: string;
   req_date?: string;
   completed_at?: string;
   invoice_number?: string;
@@ -51,6 +52,7 @@ const normalizeStatus = (status?: string) => {
   if (lower === 'confirmed') return 'Confirmed';
   if (lower === 'completed') return 'Completed';
   if (lower === 'cancelled' || lower === 'canceled') return 'Cancelled';
+  if (lower === 'declined' || lower === 'rejected') return 'Declined';
   return 'Pending';
 };
 
@@ -68,6 +70,7 @@ const statusClassMap: Record<string, string> = {
   Confirmed: 'bg-blue-50 text-blue-700 border-blue-200',
   Completed: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   Cancelled: 'bg-rose-50 text-rose-700 border-rose-200',
+  Declined: 'bg-rose-50 text-rose-700 border-rose-200',
 };
 
 const OrderInvoiceModal: React.FC<Props> = ({ isOpen, onClose, order, viewerRole }) => {
@@ -76,7 +79,14 @@ const OrderInvoiceModal: React.FC<Props> = ({ isOpen, onClose, order, viewerRole
   const reqId = Number(order.req_id || 0);
   const invoiceNumber = String(order.invoice_number || '').trim();
   const status = normalizeStatus(order.req_status);
+  const declineReason = String(order.decline_reason || '').trim();
   const isCompleted = status === 'Completed';
+  const isPending = status === 'Pending';
+  const isConfirmed = status === 'Confirmed';
+  const isCancelled = status === 'Cancelled';
+  const isDeclined = status === 'Declined';
+  const isFarmerDeclined = (isDeclined || isCancelled) && Boolean(declineReason);
+  const displayStatus = isFarmerDeclined ? 'Declined' : status;
   const isInvoiceMode = isCompleted;
   const completedTime = order.completed_at;
   const completedTimeLabel =
@@ -102,8 +112,24 @@ const OrderInvoiceModal: React.FC<Props> = ({ isOpen, onClose, order, viewerRole
 
   const timeline = [
     { label: 'Requested', value: formatDateTime(order.req_date), done: true },
-    { label: 'Confirmed', value: status === 'Pending' ? 'Waiting for farmer action' : 'Confirmed by farmer', done: status !== 'Pending' },
-    { label: 'Completed', value: completedTimeLabel, done: status === 'Completed' },
+    ...(isPending
+      ? [{ label: 'Confirmed', value: 'Waiting for farmer action', done: false }]
+      : []),
+    ...(isConfirmed || isCompleted
+      ? [{ label: 'Confirmed', value: `Confirmed by Farmer (${farmerName})`, done: true }]
+      : []),
+    ...(isFarmerDeclined
+      ? [{ label: 'Declined', value: `Reason: ${declineReason}`, done: true }]
+      : []),
+    ...(isCancelled && !isFarmerDeclined
+      ? [{ label: 'Cancelled', value: 'Order was cancelled.', done: true }]
+      : []),
+    ...(isDeclined && !isFarmerDeclined
+      ? [{ label: 'Declined', value: 'Order was declined by farmer.', done: true }]
+      : []),
+    ...(isCompleted
+      ? [{ label: 'Completed', value: completedTimeLabel, done: true }]
+      : []),
   ];
 
   return (
@@ -129,8 +155,8 @@ const OrderInvoiceModal: React.FC<Props> = ({ isOpen, onClose, order, viewerRole
               )}
             </div>
             <div className="text-right space-y-1">
-              <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold ${statusClassMap[status] || 'bg-slate-50 text-slate-700 border-slate-200'}`}>
-                {status}
+              <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold ${statusClassMap[displayStatus] || 'bg-slate-50 text-slate-700 border-slate-200'}`}>
+                {displayStatus}
               </span>
               <p className="text-[11px] text-slate-500">Requested: {formatDateTime(order.req_date)}</p>
               <p className="text-[11px] text-slate-500">Completed: {completedTimeLabel}</p>

@@ -6,8 +6,16 @@ import { getVerificationSuccessTemplate, getVerificationExpiredTemplate } from '
 import { writeLog } from '../services/systemLogService';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PASSWORD_COMPLEXITY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
+const PASSWORD_COMPLEXITY_MESSAGE =
+  'Your password must contain a mix of uppercase and lowercase letters, numbers, and special characters.';
 
 const normalizeEmail = (value: unknown) => String(value ?? '').trim().toLowerCase();
+const normalizeLoginIdentifier = (value: unknown) => {
+  const raw = String(value ?? '').trim();
+  if (raw.toLowerCase() === 'agrilink') return 'AgriLink';
+  return raw.toLowerCase();
+};
 
 export const registerController = async (req: Request, res: Response) => {
   try {
@@ -19,6 +27,9 @@ export const registerController = async (req: Request, res: Response) => {
     }
     if (!EMAIL_REGEX.test(normalizedEmail)) {
       return res.status(400).json({ message: 'Please enter a valid email address' });
+    }
+    if (!PASSWORD_COMPLEXITY_REGEX.test(String(password))) {
+      return res.status(400).json({ message: PASSWORD_COMPLEXITY_MESSAGE });
     }
 
     const result = await registerUser({ email: normalizedEmail, password, firstName, lastName, role_name, city, province });
@@ -59,6 +70,9 @@ export const updatePasswordController = async (req: Request, res: Response) => {
         }
         if (String(newPassword).length < 8) {
             return res.status(400).json({ message: 'New password must be at least 8 characters.' });
+        }
+        if (!PASSWORD_COMPLEXITY_REGEX.test(String(newPassword))) {
+            return res.status(400).json({ message: PASSWORD_COMPLEXITY_MESSAGE });
         }
         if (currentPassword === newPassword) {
             return res.status(400).json({ message: 'New password must be different from current password.' });
@@ -167,15 +181,15 @@ export const verifyController = async (req: Request, res: Response) => {
 export const loginController = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
-    const normalizedEmail = normalizeEmail(email);
+    const normalizedEmail = normalizeLoginIdentifier(email);
+    const isAdminLoginKey = normalizedEmail === 'AgriLink';
 
     if (!normalizedEmail || !password) {
       return res.status(400).json({ message: 'Email and password are required' });
     }
-    if (!EMAIL_REGEX.test(normalizedEmail)) {
+    if (!isAdminLoginKey && !EMAIL_REGEX.test(normalizedEmail)) {
       return res.status(400).json({ message: 'Please enter a valid email address' });
     }
-
     const result = await loginUser({ email: normalizedEmail, password });
 
     // System log: successful login
@@ -315,6 +329,9 @@ export const resetPasswordByTokenController = async (req: Request, res: Response
   try {
     const { token, newPassword } = req.body;
     if (!token || !newPassword) return res.status(400).json({ message: 'Token and new password required' });
+    if (!PASSWORD_COMPLEXITY_REGEX.test(String(newPassword))) {
+      return res.status(400).json({ message: PASSWORD_COMPLEXITY_MESSAGE });
+    }
 
     await resetPasswordByToken(token, newPassword);
 

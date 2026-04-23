@@ -54,6 +54,10 @@ const MarketplacePage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const token = localStorage.getItem('agrilink_token');
+  const userRole = (localStorage.getItem('agrilink_role') || '').toLowerCase();
+  const isFarmer = userRole === 'farmer';
+  const isAdminView = userRole === 'admin' || userRole === 'brgy_official' || userRole === 'lgu_official';
+  const canUseFavorites = Boolean(token) && !isFarmer && !isAdminView;
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -81,7 +85,7 @@ const MarketplacePage: React.FC = () => {
         setImageMatchedIds(matchedIds);
         setImageSearchActive(true);
         setSearchTerm('');
-        success(`✅ Found ${data.matches.length} visually similar product${data.matches.length > 1 ? 's' : ''}!`);
+        success('Showing visually similar products first');
       } else if (data.success && data.totalIndexed === 0) {
         error('No products are indexed yet. Add product images and they will be automatically indexed.');
       } else {
@@ -102,7 +106,7 @@ const MarketplacePage: React.FC = () => {
   };
 
   const fetchFavorites = async () => {
-    if (!token) return;
+    if (!canUseFavorites) return;
     try {
       const res = await fetch(`${API_BASE_URL}/favorites`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -126,10 +130,29 @@ const MarketplacePage: React.FC = () => {
     const handleFocus = () => fetchFavorites();
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [token]);
+  }, [canUseFavorites]);
+
+  useEffect(() => {
+    if (!canUseFavorites && showFavoritesOnly) {
+      setShowFavoritesOnly(false);
+    }
+  }, [canUseFavorites, showFavoritesOnly]);
 
   const handleToggleFavorite = async (productId: number, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!canUseFavorites) {
+      if (isFarmer) {
+        info('Farmers cannot save marketplace items.');
+        return;
+      }
+      if (!token) {
+        info('Sign in to save harvests.');
+        navigate('/login');
+        return;
+      }
+      info('This account cannot use saved items.');
+      return;
+    }
     if (!token) {
       info('Sign in to save harvests.');
       navigate('/login');
@@ -403,7 +426,7 @@ const MarketplacePage: React.FC = () => {
       <div className="max-w-[1600px] mx-auto px-6 sm:px-10 py-10 flex flex-col lg:flex-row gap-10">
         <aside className="w-full lg:w-56 shrink-0">
            <div className="sticky top-[140px] space-y-8">
-              {token && (
+              {canUseFavorites && (
                 <div className="pb-8 border-b border-gray-100">
                   <button
                     onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
@@ -520,7 +543,7 @@ const MarketplacePage: React.FC = () => {
                    product={p}
                    viewMode={viewMode}
                    isFavorited={favoriteIds.includes(Number(p.id))}
-                   onToggleFavorite={handleToggleFavorite}
+                   onToggleFavorite={canUseFavorites ? handleToggleFavorite : undefined}
                    onClick={() => navigate(`/buyer/product/${p.id}`)}
                  />
                ))}
@@ -548,3 +571,4 @@ const MarketplacePage: React.FC = () => {
 };
 
 export default MarketplacePage;
+

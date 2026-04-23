@@ -195,6 +195,10 @@ export const archiveProduct = async (req: any, res: Response) => {
         res.json({ message: 'Product archived successfully.' });
     } catch (error: any) {
         console.error('CRITICAL: archiveProduct error:', error);
+        const message = String(error?.message || '');
+        if (message.toLowerCase().includes('active or reserved orders')) {
+            return res.status(400).json({ message });
+        }
         res.status(500).json({ message: error.message || 'Error archiving product.' });
     }
 };
@@ -272,6 +276,10 @@ export const deleteProduct = async (req: any, res: Response) => {
         res.json({ message: 'Product deleted successfully.' });
     } catch (error: any) {
         console.error('CRITICAL: deleteProduct error:', error);
+        const message = String(error?.message || '');
+        if (message.toLowerCase().includes('active or reserved orders')) {
+            return res.status(400).json({ message });
+        }
         res.status(500).json({ message: error.message || 'Error deleting product.' });
     }
 };

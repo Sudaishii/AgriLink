@@ -225,7 +225,7 @@ export const unarchiveProduct = async (pId: number, uId: number) => {
 export const archiveProduct = async (pId: number, uId: number) => {
     await ensureStockThresholdColumns();
     const [orders]: any = await db.execute(
-        'SELECT req_id FROM purchase_table WHERE product_id = ? AND req_status IN ("Pending", "Confirmed")',
+        'SELECT req_id FROM purchase_table WHERE product_id = ? AND req_status IN ("Pending", "Confirmed", "Processing")',
         [pId]
     );
 
@@ -238,5 +238,14 @@ export const archiveProduct = async (pId: number, uId: number) => {
 
 export const deleteProduct = async (pId: number, uId: number) => {
     await ensureStockThresholdColumns();
+    const [orders]: any = await db.execute(
+        'SELECT req_id FROM purchase_table WHERE product_id = ? AND req_status IN ("Pending", "Confirmed", "Processing")',
+        [pId]
+    );
+
+    if (orders.length > 0) {
+        throw new Error('Cannot delete product with active or reserved orders. Please fulfill or cancel orders first.');
+    }
+
     await db.execute('DELETE FROM product_table WHERE p_id = ? AND u_id = ?', [pId, uId]);
 };

@@ -50,6 +50,21 @@ INSERT INTO `auth_table` (`id`, `email`, `password_hash`, `role_id`, `is_verifie
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `cart_table`
+--
+
+CREATE TABLE `cart_table` (
+  `cart_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `product_id` int(11) NOT NULL,
+  `quantity` decimal(10,2) NOT NULL DEFAULT 1.00,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `farmer_badges`
 --
 
@@ -366,6 +381,14 @@ ALTER TABLE `auth_table`
   ADD KEY `role_id` (`role_id`);
 
 --
+-- Indexes for table `cart_table`
+--
+ALTER TABLE `cart_table`
+  ADD PRIMARY KEY (`cart_id`),
+  ADD UNIQUE KEY `uq_cart_user_product` (`user_id`,`product_id`),
+  ADD KEY `idx_cart_product` (`product_id`);
+
+--
 -- Indexes for table `farmer_badges`
 --
 ALTER TABLE `farmer_badges`
@@ -482,6 +505,12 @@ ALTER TABLE `auth_table`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
+-- AUTO_INCREMENT for table `cart_table`
+--
+ALTER TABLE `cart_table`
+  MODIFY `cart_id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `farmer_badges`
 --
 ALTER TABLE `farmer_badges`
@@ -574,6 +603,13 @@ ALTER TABLE `user_favorites`
 --
 ALTER TABLE `auth_table`
   ADD CONSTRAINT `auth_table_ibfk_1` FOREIGN KEY (`role_id`) REFERENCES `role_table` (`id`);
+
+--
+-- Constraints for table `cart_table`
+--
+ALTER TABLE `cart_table`
+  ADD CONSTRAINT `cart_table_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users_table` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `cart_table_ibfk_2` FOREIGN KEY (`product_id`) REFERENCES `product_table` (`p_id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `farmer_service_reviews`

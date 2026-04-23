@@ -9,6 +9,7 @@ const ensurePurchaseColumns = async () => {
         return;
     await database_1.db.execute('ALTER TABLE purchase_table ADD COLUMN IF NOT EXISTS invoice_number VARCHAR(50) DEFAULT NULL');
     await database_1.db.execute('ALTER TABLE purchase_table ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP NULL DEFAULT NULL');
+    await database_1.db.execute('ALTER TABLE purchase_table ADD COLUMN IF NOT EXISTS decline_reason TEXT NULL');
     await database_1.db.execute(`UPDATE purchase_table
          SET invoice_number = CONCAT(
            'ORD-',
@@ -36,7 +37,7 @@ exports.createPurchaseRequest = createPurchaseRequest;
 const getFarmerOrders = async (uId) => {
     await ensurePurchaseColumns();
     await (0, reviewService_1.ensureFarmerServiceReviewTable)();
-    const [rows] = await database_1.db.execute(`SELECT pt.*, p.p_name, p.p_price, p.p_image, u.first_name as buyer_first, u.last_name as buyer_last,
+    const [rows] = await database_1.db.execute(`SELECT pt.*, p.p_name, p.p_price, p.p_unit, p.p_image, p.harvest_date, u.first_name as buyer_first, u.last_name as buyer_last,
                 CASE WHEN fsr.fsr_id IS NULL THEN 0 ELSE 1 END AS has_farmer_review
      FROM purchase_table pt
      JOIN product_table p ON pt.product_id = p.p_id
@@ -77,10 +78,10 @@ const getBuyerOrders = async (buyerId) => {
     return rows;
 };
 exports.getBuyerOrders = getBuyerOrders;
-const updateOrderStatus = async (reqId, status, uId, notificationService) => {
+const updateOrderStatus = async (reqId, status, uId, notificationService, declineReason) => {
     await ensurePurchaseColumns();
     // Ensure the product belongs to the farmer and get current context
-    const [rows] = await database_1.db.execute(`SELECT pt.req_status, pt.quantity, pt.product_id, pt.buyer_id, pt.invoice_number, p.p_name, p.u_id as farmer_id,
+    const [rows] = await database_1.db.execute(`SELECT pt.req_status, pt.quantity, pt.product_id, pt.buyer_id, pt.invoice_number, p.p_name, p.harvest_date, p.u_id as farmer_id,
                 fu.first_name AS farmer_first_name, fu.last_name AS farmer_last_name
          FROM purchase_table pt 
          JOIN product_table p ON pt.product_id = p.p_id 
@@ -91,35 +92,64 @@ const updateOrderStatus = async (reqId, status, uId, notificationService) => {
         throw new Error('Unauthorized or order not found.');
     }
     const previousStatus = order.req_status;
+    const normalizedStatus = String(status || '').trim();
+    const statusLower = normalizedStatus.toLowerCase();
+    const normalizedDeclineReason = String(declineReason || '').trim();
+    const transitionMap = {
+        Pending: ['Confirmed', 'Cancelled'],
+        Confirmed: ['Pending', 'Completed', 'Cancelled'],
+        Completed: [],
+        Cancelled: []
+    };
+    if (statusLower === 'cancelled' && !normalizedDeclineReason) {
+        throw new Error('Decline reason is required.');
+    }
+    if (normalizedStatus === previousStatus) {
+        return;
+    }
+    if (!transitionMap[previousStatus]?.includes(normalizedStatus)) {
+        throw new Error(`Invalid order status transition: ${previousStatus} -> ${normalizedStatus}.`);
+    }
     // 1. If moving to "Confirmed" and was "Pending", deduct quantity
-    if (status === 'Confirmed' && previousStatus === 'Pending') {
+    if (normalizedStatus === 'Confirmed' && previousStatus === 'Pending') {
         const [updateRes] = await database_1.db.execute('UPDATE product_table SET p_quantity = p_quantity - ? WHERE p_id = ? AND p_quantity >= ?', [order.quantity, order.product_id, order.quantity]);
         if (updateRes.affectedRows === 0) {
             throw new Error('Insufficient stock to confirm this order.');
         }
     }
+    // Restore reserved stock if farmer reverts/declines from Confirmed.
+    if (previousStatus === 'Confirmed' && (normalizedStatus === 'Pending' || statusLower === 'cancelled')) {
+        await database_1.db.execute('UPDATE product_table SET p_quantity = p_quantity + ? WHERE p_id = ?', [order.quantity, order.product_id]);
+    }
+    if (normalizedStatus === 'Completed') {
+        const harvestDate = order.harvest_date ? new Date(order.harvest_date) : null;
+        if (harvestDate && !Number.isNaN(harvestDate.getTime()) && Date.now() < harvestDate.getTime()) {
+            throw new Error(`Cannot complete order before harvest time (${harvestDate.toLocaleString()}).`);
+        }
+    }
     // 2. Update the order status (+ invoice metadata when completed)
     let invoiceNumber = order.invoice_number || null;
-    if (status === 'Completed') {
+    if (normalizedStatus === 'Completed') {
         invoiceNumber = invoiceNumber || buildInvoiceNumber(reqId);
-        await database_1.db.execute('UPDATE purchase_table SET req_status = ?, invoice_number = ?, completed_at = CURRENT_TIMESTAMP WHERE req_id = ?', [status, invoiceNumber, reqId]);
+        await database_1.db.execute('UPDATE purchase_table SET req_status = ?, invoice_number = ?, completed_at = CURRENT_TIMESTAMP, decline_reason = NULL WHERE req_id = ?', [normalizedStatus, invoiceNumber, reqId]);
+    }
+    else if (statusLower === 'cancelled') {
+        await database_1.db.execute('UPDATE purchase_table SET req_status = ?, completed_at = NULL, decline_reason = ? WHERE req_id = ?', [normalizedStatus, normalizedDeclineReason, reqId]);
     }
     else {
-        await database_1.db.execute('UPDATE purchase_table SET req_status = ?, completed_at = NULL WHERE req_id = ?', [status, reqId]);
+        await database_1.db.execute('UPDATE purchase_table SET req_status = ?, completed_at = NULL, decline_reason = NULL WHERE req_id = ?', [normalizedStatus, reqId]);
     }
     // 3. Notify the buyer
     try {
         const farmerName = `${String(order.farmer_first_name || '').trim()} ${String(order.farmer_last_name || '').trim()}`.trim() || 'Unknown Farmer';
-        const normalizedStatus = String(status || '').trim();
-        const statusLower = normalizedStatus.toLowerCase();
         const statusMessage = statusLower === 'confirmed'
             ? `Farmer ${farmerName} approved your order for ${order.p_name}.`
             : statusLower === 'completed' && invoiceNumber
                 ? `Farmer ${farmerName} completed your order for ${order.p_name}. Order ID: ${invoiceNumber}.`
                 : statusLower === 'cancelled'
-                    ? `Farmer ${farmerName} cancelled your order for ${order.p_name}.`
+                    ? `Farmer ${farmerName} declined your order for ${order.p_name}.${normalizedDeclineReason ? ` Reason: ${normalizedDeclineReason}` : ''}`
                     : `Farmer ${farmerName} updated your order for ${order.p_name} to "${normalizedStatus}".`;
-        const statusLink = status === 'Completed' && invoiceNumber
+        const statusLink = normalizedStatus === 'Completed' && invoiceNumber
             ? `/profile?tab=history&invoice=${encodeURIComponent(invoiceNumber)}`
             : '/profile?tab=history';
         const statusTitle = statusLower === 'confirmed'
@@ -127,7 +157,7 @@ const updateOrderStatus = async (reqId, status, uId, notificationService) => {
             : statusLower === 'completed'
                 ? `Farmer ${farmerName} Completed Your Order`
                 : statusLower === 'cancelled'
-                    ? `Farmer ${farmerName} Cancelled Your Order`
+                    ? `Farmer ${farmerName} Declined Your Order`
                     : `Order ${normalizedStatus}`;
         await notificationService.createNotification(order.buyer_id, statusTitle, statusMessage, 'order', statusLink);
     }
@@ -164,7 +194,7 @@ const cancelPurchase = async (reqId, uId, role) => {
     // Delete or Update to "Cancelled"
     // The user said "remove this one", but "CANCEL functionality" implies status change or delete.
     // Usually P2P apps just delete or mark Cancelled. I'll mark as Cancelled.
-    await database_1.db.execute('UPDATE purchase_table SET req_status = "Cancelled" WHERE req_id = ?', [reqId]);
+    await database_1.db.execute('UPDATE purchase_table SET req_status = "Cancelled", decline_reason = NULL WHERE req_id = ?', [reqId]);
     return true;
 };
 exports.cancelPurchase = cancelPurchase;

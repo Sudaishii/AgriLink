@@ -18,12 +18,19 @@ import * as cartService from '../../../services/cartService';
 const CartPage: React.FC = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
-  const [cartItems, setCartItems] = useState<cartService.CartItem[]>(cartService.getCart());
+  const [cartItems, setCartItems] = useState<cartService.CartItem[]>([]);
+  const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<number | null>(null);
   const { success, error, info } = useToast();
 
   useEffect(() => {
+    const bootstrap = async () => {
+      const items = await cartService.syncCartFromServer();
+      setCartItems(items);
+    };
+    void bootstrap();
+
     const handleCartUpdate = () => {
       setCartItems(cartService.getCart());
     };
@@ -31,11 +38,22 @@ const CartPage: React.FC = () => {
     return () => window.removeEventListener('cart-updated', handleCartUpdate);
   }, []);
 
-  const updateQuantity = (id: number, delta: number) => {
+  useEffect(() => {
+    setSelectedItemIds((prev) => {
+      const existingIds = new Set(cartItems.map((item) => item.id));
+      const kept = prev.filter((id) => existingIds.has(id));
+      const newIds = cartItems
+        .map((item) => item.id)
+        .filter((id) => !prev.includes(id));
+      return [...kept, ...newIds];
+    });
+  }, [cartItems]);
+
+  const updateQuantity = async (id: number, delta: number) => {
     const item = cartItems.find(i => i.id === id);
     if (item) {
       if (item.quantity <= 1 && delta < 0) return;
-      const result = cartService.updateCartQuantity(id, item.quantity + delta);
+      const result = await cartService.updateCartQuantity(id, item.quantity + delta);
       if (result.success && result.message) {
         info(result.message);
       } else if (!result.success) {
@@ -49,16 +67,39 @@ const CartPage: React.FC = () => {
     setIsDeleteModalOpen(true);
   };
 
-  const removeItem = (id: number) => {
-    cartService.removeFromCart(id);
+  const removeItem = async (id: number) => {
+    await cartService.removeFromCart(id);
     info('Item removed.');
     setItemToDelete(null);
   };
 
-  const subtotal = cartService.getCartTotal();
+  const selectedItems = useMemo(
+    () => cartItems.filter((item) => selectedItemIds.includes(item.id)),
+    [cartItems, selectedItemIds]
+  );
+  const subtotal = selectedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const total = subtotal;
   const totalUnits = useMemo(() => cartItems.reduce((sum, item) => sum + item.quantity, 0), [cartItems]);
+  const selectedUnits = useMemo(
+    () => selectedItems.reduce((sum, item) => sum + item.quantity, 0),
+    [selectedItems]
+  );
+  const allSelected = cartItems.length > 0 && selectedItemIds.length === cartItems.length;
   const formatCurrency = (value: number) => `PHP ${value.toLocaleString()}`;
+
+  const toggleItemSelection = (itemId: number) => {
+    setSelectedItemIds((prev) =>
+      prev.includes(itemId) ? prev.filter((id) => id !== itemId) : [...prev, itemId]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedItemIds([]);
+      return;
+    }
+    setSelectedItemIds(cartItems.map((item) => item.id));
+  };
 
   const handlePlaceOrder = async () => {
     const token = localStorage.getItem('agrilink_token');
@@ -70,11 +111,14 @@ const CartPage: React.FC = () => {
       return;
     }
 
-    if (cartItems.length === 0) return;
+    if (selectedItems.length === 0) {
+      info('Select at least one item to send request.');
+      return;
+    }
 
     setIsLoading(true);
     try {
-      const promises = cartItems.map(item => 
+      const promises = selectedItems.map(item => 
         fetch(`${API_BASE_URL}/purchases`, {
           method: 'POST',
           headers: {
@@ -95,7 +139,14 @@ const CartPage: React.FC = () => {
       await Promise.all(promises);
       
       success('Order requests sent!');
-      cartService.clearCart();
+      const selectedIds = new Set(selectedItems.map((item) => item.id));
+      const removePromises: Promise<void>[] = [];
+      cartItems.forEach((item) => {
+        if (selectedIds.has(item.id)) {
+          removePromises.push(cartService.removeFromCart(item.id));
+        }
+      });
+      await Promise.all(removePromises);
       navigate('/profile?tab=history');
     } catch (err: any) {
       console.error('Order failed:', err);
@@ -143,10 +194,34 @@ const CartPage: React.FC = () => {
                </div>
 
                {cartItems.length > 0 ? (
+                 <>
+                 <div className="mb-4 flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/50 px-4 py-3">
+                    <label className="inline-flex items-center gap-2 text-xs font-bold text-gray-700 uppercase tracking-wide">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleSelectAll}
+                        className="h-4 w-4 rounded border-gray-300 text-[#5ba409] focus:ring-[#5ba409]"
+                      />
+                      Select All
+                    </label>
+                    <span className="text-[11px] font-semibold text-gray-500">
+                      {selectedItems.length} of {cartItems.length} selected
+                    </span>
+                 </div>
                  <div className="max-h-[480px] overflow-y-auto pr-4 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
                     <div className="space-y-4">
                        {cartItems.map((item) => (
                          <div key={item.id} className="bg-white border border-gray-100 rounded-2xl p-6 flex flex-col md:flex-row items-center gap-6 shadow-sm hover:border-[#5ba409]/10 transition-all">
+                            <div className="self-start md:self-center">
+                              <input
+                                type="checkbox"
+                                checked={selectedItemIds.includes(item.id)}
+                                onChange={() => toggleItemSelection(item.id)}
+                                className="h-4 w-4 rounded border-gray-300 text-[#5ba409] focus:ring-[#5ba409]"
+                                aria-label={`Select ${item.name}`}
+                              />
+                            </div>
                             <div className="w-24 h-24 rounded-xl bg-gray-50 overflow-hidden border border-gray-100 shrink-0">
                                {item.image ? (
                                  <img src={getFullImageUrl(item.image)} alt={item.name} className="w-full h-full object-cover" />
@@ -189,6 +264,7 @@ const CartPage: React.FC = () => {
                        ))}
                     </div>
                  </div>
+                 </>
                ) : (
                  <div className="py-24 text-center bg-gray-50/30 border border-dashed border-gray-200 rounded-[2rem]">
                     <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center text-gray-200 mx-auto mb-6">
@@ -213,11 +289,15 @@ const CartPage: React.FC = () => {
                   
                   <div className="space-y-4">
                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-400 font-medium tracking-tight">Total Units</span>
+                        <span className="text-gray-400 font-medium tracking-tight">Selected Units</span>
+                        <span className="text-gray-900 font-bold">{selectedUnits}</span>
+                     </div>
+                     <div className="flex justify-between text-sm">
+                        <span className="text-gray-400 font-medium tracking-tight">Cart Units</span>
                         <span className="text-gray-900 font-bold">{totalUnits}</span>
                      </div>
                      <div className="pt-6 border-t border-gray-50 flex justify-between items-end">
-                        <span className="text-gray-400 font-medium tracking-tight">Collective Value</span>
+                        <span className="text-gray-400 font-medium tracking-tight">Selected Value</span>
                         <span className="text-3xl font-bold text-gray-900">{formatCurrency(total)}</span>
                      </div>
                   </div>
@@ -230,7 +310,7 @@ const CartPage: React.FC = () => {
                   </div>
 
                   <button 
-                    disabled={cartItems.length === 0 || isLoading}
+                    disabled={selectedItems.length === 0 || isLoading}
                     onClick={handlePlaceOrder}
                     className="w-full py-5 bg-gray-900 text-white rounded-2xl font-bold text-xs uppercase tracking-widest shadow-xl shadow-gray-900/10 hover:bg-[#5ba409] transition-all disabled:opacity-50 flex items-center justify-center gap-3"
                   >
@@ -248,7 +328,7 @@ const CartPage: React.FC = () => {
       <ConfirmationModal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
-        onConfirm={() => itemToDelete && removeItem(itemToDelete)}
+        onConfirm={() => { if (itemToDelete) void removeItem(itemToDelete); }}
         title="Remove item?"
         message="Are you sure you want to remove this fresh produce from your cart? You can always add it back later from the marketplace."
         confirmText="Remove Item"

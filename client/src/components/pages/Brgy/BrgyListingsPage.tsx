@@ -78,6 +78,7 @@ const BrgyListingsPage: React.FC = () => {
   const [isAwarding, setIsAwarding] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [revokingBadgeId, setRevokingBadgeId] = useState<number | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<{ badgeId: number; farmerName: string } | null>(null);
   const [notesError, setNotesError] = useState<string>('');
 
   // ── Fetch farmers ──────────────────────────────────────────────────────────
@@ -150,8 +151,14 @@ const BrgyListingsPage: React.FC = () => {
 
   // ── Revoke badge ───────────────────────────────────────────────────────────
 
-  const handleRevoke = async (badgeId: number) => {
+  const openRevokeConfirmation = (badgeId: number, farmerName: string) => {
+    setRevokeTarget({ badgeId, farmerName });
+  };
+
+  const handleRevoke = async () => {
     if (!token) return;
+    if (!revokeTarget?.badgeId) return;
+    const badgeId = revokeTarget.badgeId;
     setRevokingBadgeId(badgeId);
     try {
       const res = await fetch(`${API_BASE_URL}/badges/${badgeId}`, {
@@ -160,6 +167,7 @@ const BrgyListingsPage: React.FC = () => {
       });
       if (res.ok) {
         toast.success('Certification revoked.');
+        setRevokeTarget(null);
         fetchFarmers();
       } else {
         toast.error('Failed to revoke certification.');
@@ -426,7 +434,7 @@ const BrgyListingsPage: React.FC = () => {
                     <div className="mt-auto">
                       {isCertified && badge ? (
                         <button
-                          onClick={() => handleRevoke(badge.id)}
+                          onClick={() => openRevokeConfirmation(badge.id, farmer.name)}
                           disabled={revokingBadgeId === badge.id}
                           className="w-full py-3 border-2 border-gray-200 hover:border-red-300 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-2xl text-sm font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                         >
@@ -563,6 +571,53 @@ const BrgyListingsPage: React.FC = () => {
             </form>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(revokeTarget)}
+        onClose={() => setRevokeTarget(null)}
+        maxWidth="max-w-md"
+      >
+        <div className="p-1">
+          <div className="flex items-center gap-4 mb-5">
+            <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center">
+              <ShieldOff size={22} className="text-red-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-extrabold text-gray-900">Revoke Certification</h2>
+              <p className="text-sm text-gray-500 font-medium">This action removes the Verified Farmer badge.</p>
+            </div>
+          </div>
+
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-6">
+            <p className="text-sm text-red-800">
+              Are you sure you want to revoke certification for{' '}
+              <span className="font-extrabold">{revokeTarget?.farmerName}</span>?
+            </p>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setRevokeTarget(null)}
+              className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl text-sm font-bold hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleRevoke}
+              disabled={revokingBadgeId === revokeTarget?.badgeId}
+              className="flex-[2] py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {revokingBadgeId === revokeTarget?.badgeId ? (
+                <><RefreshCw size={14} className="animate-spin" /> Revoking...</>
+              ) : (
+                <><ShieldOff size={14} /> Confirm Revoke</>
+              )}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

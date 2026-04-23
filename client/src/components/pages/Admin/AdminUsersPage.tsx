@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, ShieldCheck, Mail, MapPin, User, Shield, Users as UsersIcon, ChevronRight, Activity, Globe, MoreVertical, Ban, Archive, UserPlus, Link, Copy, Check, Info, Trash2, RotateCcw } from 'lucide-react';
+import { Search, ShieldCheck, Mail, MapPin, User, Users as UsersIcon, Globe, Ban, UserPlus, Link, Copy, Info, Trash2, RotateCcw, Save } from 'lucide-react';
 import DashboardCard from '../../ui/DashboardCard';
 import Modal from '../../ui/Modal';
 import ConfirmationModal from '../../ui/ConfirmationModal';
@@ -23,6 +23,21 @@ interface AdminUsersPageProps {
   viewerRole?: string;
 }
 
+type EditableUserProfile = {
+  id: string | number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  province: string;
+  zipCode: string;
+  bio: string;
+  role: string;
+  status: string;
+};
+
 const AdminUsersPage: React.FC<AdminUsersPageProps> = ({ viewerRole }) => {
   const toast = useToast();
   const [isLoading, setIsLoading] = useState(true);
@@ -42,6 +57,10 @@ const AdminUsersPage: React.FC<AdminUsersPageProps> = ({ viewerRole }) => {
 
   // Status Action States
   const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; userId: string | number; action: 'suspend' | 'delete' | 'restore'; name: string } | null>(null);
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+  const [accountModalLoading, setAccountModalLoading] = useState(false);
+  const [accountSaveLoading, setAccountSaveLoading] = useState(false);
+  const [selectedProfile, setSelectedProfile] = useState<EditableUserProfile | null>(null);
   
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -100,6 +119,76 @@ const AdminUsersPage: React.FC<AdminUsersPageProps> = ({ viewerRole }) => {
       } catch (err) {
           toast.error('Network error updating status.');
       }
+  };
+
+  const handleOpenAccountModal = async (userId: string | number) => {
+    setIsAccountModalOpen(true);
+    setAccountModalLoading(true);
+    setSelectedProfile(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/${userId}`, {
+        headers: { Authorization: `Bearer ${getStoredAuthToken()}` },
+      });
+      if (!res.ok) {
+        toast.error('Failed to load user details.');
+        return;
+      }
+      const data = await res.json();
+      setSelectedProfile({
+        id: data.id,
+        firstName: data.first_name || '',
+        lastName: data.last_name || '',
+        email: data.email || '',
+        phone: data.phone || '',
+        address: data.address || '',
+        city: data.city || '',
+        province: data.province || '',
+        zipCode: data.zip_code || '',
+        bio: data.bio || '',
+        role: data.role || '',
+        status: data.status || 'active',
+      });
+    } catch {
+      toast.error('Network error while loading user details.');
+    } finally {
+      setAccountModalLoading(false);
+    }
+  };
+
+  const handleSaveAccount = async () => {
+    if (!selectedProfile) return;
+    setAccountSaveLoading(true);
+    try {
+      const form = new FormData();
+      form.append('first_name', selectedProfile.firstName);
+      form.append('last_name', selectedProfile.lastName);
+      form.append('phone', selectedProfile.phone);
+      form.append('address', selectedProfile.address);
+      form.append('city', selectedProfile.city);
+      form.append('province', selectedProfile.province);
+      form.append('zip_code', selectedProfile.zipCode);
+      form.append('bio', selectedProfile.bio);
+
+      const res = await fetch(`${API_BASE_URL}/users/${selectedProfile.id}/profile`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${getStoredAuthToken()}` },
+        body: form,
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.message || 'Failed to save account details.');
+        return;
+      }
+
+      toast.success('User account updated successfully.');
+      await fetchUsers();
+      setIsAccountModalOpen(false);
+    } catch {
+      toast.error('Network error while saving account details.');
+    } finally {
+      setAccountSaveLoading(false);
+    }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -350,6 +439,13 @@ const AdminUsersPage: React.FC<AdminUsersPageProps> = ({ viewerRole }) => {
                                     </td>
                                     <td className="py-4 px-6 text-right">
                                         <div className="flex items-center justify-end gap-2">
+                                            <button
+                                                onClick={() => handleOpenAccountModal(user.id)}
+                                                className="p-2 bg-white border border-gray-200 rounded-lg text-gray-500 hover:text-[#5ba409] hover:border-[#5ba409] transition-colors shadow-sm"
+                                                title="View / Edit Account"
+                                            >
+                                                <Info size={16} />
+                                            </button>
                                             {user.status.toLowerCase() === 'active' && (
                                                 <>
                                                     <button 
@@ -587,6 +683,150 @@ const AdminUsersPage: React.FC<AdminUsersPageProps> = ({ viewerRole }) => {
                 onConfirm={() => handleUpdateStatus(confirmModal.userId, confirmModal.action === 'delete' ? 'deleted' : confirmModal.action === 'suspend' ? 'suspended' : 'active')}
             />
         )}
+
+        <Modal isOpen={isAccountModalOpen} onClose={() => setIsAccountModalOpen(false)} maxWidth="max-w-2xl">
+            <div className="p-2">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-[#5ba409]">
+                        <Info size={20} />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-bold text-gray-900 tracking-tight">View / Edit User Account</h2>
+                        <p className="text-sm font-medium text-gray-500 mt-1">Review and update account details</p>
+                    </div>
+                </div>
+
+                {accountModalLoading ? (
+                    <div className="py-12 text-center text-sm text-gray-400">Loading account details...</div>
+                ) : selectedProfile ? (
+                    <div className="space-y-5">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-xs font-semibold text-gray-500 ml-2 mb-1 block uppercase tracking-wider">First Name</label>
+                                <input
+                                    value={selectedProfile.firstName}
+                                    onChange={(e) => setSelectedProfile((prev) => prev ? { ...prev, firstName: e.target.value } : prev)}
+                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:bg-white focus:border-[#5ba409] focus:ring-2 focus:ring-[#5ba409]/20 transition-all outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-gray-500 ml-2 mb-1 block uppercase tracking-wider">Last Name</label>
+                                <input
+                                    value={selectedProfile.lastName}
+                                    onChange={(e) => setSelectedProfile((prev) => prev ? { ...prev, lastName: e.target.value } : prev)}
+                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:bg-white focus:border-[#5ba409] focus:ring-2 focus:ring-[#5ba409]/20 transition-all outline-none"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-xs font-semibold text-gray-500 ml-2 mb-1 block uppercase tracking-wider">Email</label>
+                                <input
+                                    value={selectedProfile.email}
+                                    disabled
+                                    className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl text-sm font-medium text-gray-500 outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-gray-500 ml-2 mb-1 block uppercase tracking-wider">Phone</label>
+                                <input
+                                    value={selectedProfile.phone}
+                                    onChange={(e) => setSelectedProfile((prev) => prev ? { ...prev, phone: e.target.value.replace(/\D/g, '').slice(0, 11) } : prev)}
+                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:bg-white focus:border-[#5ba409] focus:ring-2 focus:ring-[#5ba409]/20 transition-all outline-none"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-xs font-semibold text-gray-500 ml-2 mb-1 block uppercase tracking-wider">Address</label>
+                            <input
+                                value={selectedProfile.address}
+                                onChange={(e) => setSelectedProfile((prev) => prev ? { ...prev, address: e.target.value } : prev)}
+                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:bg-white focus:border-[#5ba409] focus:ring-2 focus:ring-[#5ba409]/20 transition-all outline-none"
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-4">
+                            <div>
+                                <label className="text-xs font-semibold text-gray-500 ml-2 mb-1 block uppercase tracking-wider">City</label>
+                                <input
+                                    value={selectedProfile.city}
+                                    onChange={(e) => setSelectedProfile((prev) => prev ? { ...prev, city: e.target.value } : prev)}
+                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:bg-white focus:border-[#5ba409] focus:ring-2 focus:ring-[#5ba409]/20 transition-all outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-gray-500 ml-2 mb-1 block uppercase tracking-wider">Province</label>
+                                <input
+                                    value={selectedProfile.province}
+                                    onChange={(e) => setSelectedProfile((prev) => prev ? { ...prev, province: e.target.value } : prev)}
+                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:bg-white focus:border-[#5ba409] focus:ring-2 focus:ring-[#5ba409]/20 transition-all outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-gray-500 ml-2 mb-1 block uppercase tracking-wider">ZIP Code</label>
+                                <input
+                                    value={selectedProfile.zipCode}
+                                    onChange={(e) => setSelectedProfile((prev) => prev ? { ...prev, zipCode: e.target.value } : prev)}
+                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:bg-white focus:border-[#5ba409] focus:ring-2 focus:ring-[#5ba409]/20 transition-all outline-none"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-xs font-semibold text-gray-500 ml-2 mb-1 block uppercase tracking-wider">Role</label>
+                                <input
+                                    value={selectedProfile.role}
+                                    disabled
+                                    className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl text-sm font-medium text-gray-500 outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-gray-500 ml-2 mb-1 block uppercase tracking-wider">Status</label>
+                                <input
+                                    value={selectedProfile.status}
+                                    disabled
+                                    className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl text-sm font-medium text-gray-500 outline-none"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-xs font-semibold text-gray-500 ml-2 mb-1 block uppercase tracking-wider">Bio</label>
+                            <textarea
+                                rows={3}
+                                value={selectedProfile.bio}
+                                onChange={(e) => setSelectedProfile((prev) => prev ? { ...prev, bio: e.target.value } : prev)}
+                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:bg-white focus:border-[#5ba409] focus:ring-2 focus:ring-[#5ba409]/20 transition-all outline-none resize-none"
+                            />
+                        </div>
+
+                        <div className="pt-2 flex items-center justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setIsAccountModalOpen(false)}
+                                className="px-5 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSaveAccount}
+                                disabled={accountSaveLoading}
+                                className="flex items-center gap-2 px-6 py-2.5 bg-[#5ba409] text-white rounded-lg text-sm font-semibold shadow-sm hover:bg-green-700 transition-colors disabled:opacity-50"
+                            >
+                                <Save size={16} />
+                                {accountSaveLoading ? 'Saving...' : 'Save Changes'}
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="py-12 text-center text-sm text-gray-400">No account details found.</div>
+                )}
+            </div>
+        </Modal>
     </div>
   );
 };

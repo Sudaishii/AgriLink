@@ -23,6 +23,15 @@ interface Farmer {
   badge_label?: string | null;
 }
 
+interface FarmerServiceReview {
+  fsr_id: number;
+  rating: number;
+  comment: string;
+  created_at: string;
+  reviewer_first_name?: string;
+  reviewer_last_name?: string;
+}
+
 const MapPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -31,7 +40,7 @@ const MapPage: React.FC = () => {
   const userRole = (localStorage.getItem('agrilink_role') || '').toLowerCase();
   const isFarmer = userRole === 'farmer';
   const highlightedFarmerId = Number(searchParams.get('farmerId'));
-  const currentUserId = Number(localStorage.getItem('agrilink_id'));
+  const currentUserId = Number(localStorage.getItem('agrilink_id') || localStorage.getItem('agrilink_userId'));
 
   const [searchQuery, setSearchQuery] = useState('');
   const [viewState, setViewState] = useState({
@@ -47,6 +56,10 @@ const MapPage: React.FC = () => {
   const [loadingFarmers, setLoadingFarmers] = useState(true);
   const [showAllFarms, setShowAllFarms] = useState(true);
   const [focusMode, setFocusMode] = useState(false);
+  const [popupTab, setPopupTab] = useState<'overview' | 'reviews'>('overview');
+  const [reviewsByFarmerId, setReviewsByFarmerId] = useState<Record<number, FarmerServiceReview[]>>({});
+  const [reviewsLoadingFor, setReviewsLoadingFor] = useState<number | null>(null);
+  const [reviewsErrorByFarmerId, setReviewsErrorByFarmerId] = useState<Record<number, string>>({});
   const mapRef = useRef<MapRef | null>(null);
 
 
@@ -251,6 +264,27 @@ const MapPage: React.FC = () => {
     return `${d.toFixed(1)} km`;
   };
 
+  const fetchFarmerReviews = async (farmerId: number) => {
+    if (!Number.isFinite(farmerId) || farmerId <= 0) return;
+    if (reviewsByFarmerId[farmerId]) return;
+
+    setReviewsLoadingFor(farmerId);
+    try {
+      const response = await fetch(`${API_BASE_URL}/reviews/farmer/${farmerId}`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.message || 'Unable to load reviews.');
+      }
+      const reviews = Array.isArray(data?.reviews) ? data.reviews : [];
+      setReviewsByFarmerId((prev) => ({ ...prev, [farmerId]: reviews }));
+      setReviewsErrorByFarmerId((prev) => ({ ...prev, [farmerId]: '' }));
+    } catch (err: any) {
+      setReviewsErrorByFarmerId((prev) => ({ ...prev, [farmerId]: err?.message || 'Unable to load reviews.' }));
+    } finally {
+      setReviewsLoadingFor(null);
+    }
+  };
+
   // Filter farmers by search
   const filteredFarmers = farmers.filter(f => {
     // 1️⃣ Farmers cannot see themselves on the map
@@ -344,6 +378,10 @@ const MapPage: React.FC = () => {
 
           {filteredFarmers.map(farmer => {
             const isSelected = selectedFarmerId === farmer.id;
+            const ratingValue = Number(farmer.rating);
+            const hasRating = Number.isFinite(ratingValue) && ratingValue > 0;
+            const reviewCount = Number(farmer.review_count || 0);
+            const filledStars = hasRating ? Math.round(ratingValue) : 0;
             // Conditional visibility for Focus Mode
             if (focusMode && !isSelected) return null;
             if (!showAllFarms && !isSelected) return null;
@@ -358,6 +396,7 @@ const MapPage: React.FC = () => {
                 onClick={e => {
                   e.originalEvent.stopPropagation();
                   setSelectedFarmerId(farmer.id);
+                  setPopupTab('overview');
                   setViewState({
                     ...viewState,
                     longitude: farmer.longitude,
@@ -414,56 +453,105 @@ const MapPage: React.FC = () => {
                             )}
                           </div>
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-bold text-gray-800">{(farmer.rating || 5.0).toFixed(1)}</span>
+                            <span className="text-xs font-bold text-gray-800">{hasRating ? ratingValue.toFixed(1) : '0.0'}</span>
                             <div className="flex items-center text-amber-500">
-                               {[1,2,3,4,5].map(i => <Star key={i} className={`w-3 h-3 ${i <= (farmer.rating || 5) ? 'fill-current' : 'text-gray-200'}`} />)}
+                               {[1,2,3,4,5].map(i => <Star key={i} className={`w-3 h-3 ${i <= filledStars ? 'fill-current' : 'text-gray-200'}`} />)}
                             </div>
-                            <span className="text-xs text-gray-500">({farmer.review_count || 0})</span>
+                            <span className="text-xs text-gray-500">({reviewCount})</span>
                           </div>
                           <p className="text-[11px] text-gray-500 mt-1 uppercase tracking-wide font-medium">Agricultural production</p>
                         </div>
 
                         {/* Tabs (Gmaps style) */}
                         <div className="flex gap-6 border-b border-gray-100 mb-5">
-                           <button className="text-[11px] font-bold text-[#5ba409] border-b-2 border-[#5ba409] pb-2 px-1">Overview</button>
-                           <button className="text-[11px] font-bold text-gray-400 pb-2 px-1">Reviews</button>
+                           <button
+                             onClick={(e) => {
+                               e.stopPropagation();
+                               setPopupTab('overview');
+                             }}
+                             className={`text-[11px] font-bold pb-2 px-1 ${popupTab === 'overview' ? 'text-[#5ba409] border-b-2 border-[#5ba409]' : 'text-gray-400'}`}
+                           >
+                             Overview
+                           </button>
+                           <button
+                             onClick={(e) => {
+                               e.stopPropagation();
+                               setPopupTab('reviews');
+                               fetchFarmerReviews(farmer.id);
+                             }}
+                             className={`text-[11px] font-bold pb-2 px-1 ${popupTab === 'reviews' ? 'text-[#5ba409] border-b-2 border-[#5ba409]' : 'text-gray-400'}`}
+                           >
+                             Reviews
+                           </button>
                         </div>
 
-                        {/* Action Icons (Gmaps style) - Simplified */}
-                        <div className="flex items-center justify-between mb-6 px-1">
-                          <div className="flex flex-col items-center gap-1 cursor-pointer group/action" onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&origin=${userLocation?.latitude},${userLocation?.longitude}&destination=${farmer.latitude},${farmer.longitude}`, '_blank')}>
-                             <div className="w-10 h-10 rounded-full bg-[#E5F5E0] text-[#5ba409] flex items-center justify-center group-hover/action:bg-[#5ba409] group-hover/action:text-white transition-all">
-                                <Navigation className="w-4 h-4 fill-current" />
-                             </div>
-                             <span className="text-[10px] text-[#5ba409] font-black uppercase tracking-tighter">Directions</span>
-                          </div>
-                          
-                          <div className="flex flex-col items-center gap-1 cursor-pointer group/action" onClick={() => navigate('/buyer/marketplace', { state: { farmerId: farmer.id } })}>
-                             <div className="w-10 h-10 rounded-full bg-green-50 text-[#5ba409] flex items-center justify-center group-hover/action:bg-[#5ba409] group-hover/action:text-white transition-all border border-green-100">
-                                <Package className="w-4 h-4" />
-                             </div>
-                             <span className="text-[10px] text-[#5ba409] font-black uppercase tracking-tighter">Market</span>
-                          </div>
+                        {popupTab === 'overview' ? (
+                          <>
+                            {/* Action Icons (Gmaps style) - Simplified */}
+                            <div className="flex items-center justify-between mb-6 px-1">
+                              <div className="flex flex-col items-center gap-1 cursor-pointer group/action" onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&origin=${userLocation?.latitude},${userLocation?.longitude}&destination=${farmer.latitude},${farmer.longitude}`, '_blank')}>
+                                 <div className="w-10 h-10 rounded-full bg-[#E5F5E0] text-[#5ba409] flex items-center justify-center group-hover/action:bg-[#5ba409] group-hover/action:text-white transition-all">
+                                    <Navigation className="w-4 h-4 fill-current" />
+                                 </div>
+                                 <span className="text-[10px] text-[#5ba409] font-black uppercase tracking-tighter">Directions</span>
+                              </div>
+                              
+                              <div className="flex flex-col items-center gap-1 cursor-pointer group/action" onClick={() => navigate('/buyer/marketplace', { state: { farmerId: farmer.id } })}>
+                                 <div className="w-10 h-10 rounded-full bg-green-50 text-[#5ba409] flex items-center justify-center group-hover/action:bg-[#5ba409] group-hover/action:text-white transition-all border border-green-100">
+                                    <Package className="w-4 h-4" />
+                                 </div>
+                                 <span className="text-[10px] text-[#5ba409] font-black uppercase tracking-tighter">Market</span>
+                              </div>
 
-                          <div className="flex flex-col items-center gap-1 cursor-pointer group/action" onClick={() => navigate(`/profile/${farmer.id}`)}>
-                             <div className="w-10 h-10 rounded-full bg-gray-50 text-gray-400 flex items-center justify-center group-hover/action:bg-[#5ba409] group-hover/action:text-white transition-all border border-gray-100">
-                                <User className="w-4 h-4" />
-                             </div>
-                             <span className="text-[10px] text-gray-400 font-black uppercase tracking-tighter group-hover/action:text-[#5ba409] transition-colors">Profile</span>
-                          </div>
-                        </div>
+                              <div className="flex flex-col items-center gap-1 cursor-pointer group/action" onClick={() => navigate(`/profile/${farmer.id}`)}>
+                                 <div className="w-10 h-10 rounded-full bg-gray-50 text-gray-400 flex items-center justify-center group-hover/action:bg-[#5ba409] group-hover/action:text-white transition-all border border-gray-100">
+                                    <User className="w-4 h-4" />
+                                 </div>
+                                 <span className="text-[10px] text-gray-400 font-black uppercase tracking-tighter group-hover/action:text-[#5ba409] transition-colors">Profile</span>
+                              </div>
+                            </div>
 
-                        {/* Details List */}
-                        <div className="space-y-4 pb-2">
-                           <div className="flex gap-4">
-                              <MapPin className="w-4 h-4 text-[#5ba409] mt-0.5" />
-                              <p className="text-[12px] text-gray-700 leading-tight flex-1">{farmer.farm_address || farmer.farm_city}</p>
-                           </div>
-                           <div className="flex gap-4">
-                              <Clock className="w-4 h-4 text-[#5ba409] mt-0.5" />
-                              <p className="text-[12px] text-gray-700 leading-tight flex-1">Estimated {navigationInfo?.duration || '32 mins'} drive</p>
-                           </div>
-                        </div>
+                            {/* Details List */}
+                            <div className="space-y-4 pb-2">
+                               <div className="flex gap-4">
+                                  <MapPin className="w-4 h-4 text-[#5ba409] mt-0.5" />
+                                  <p className="text-[12px] text-gray-700 leading-tight flex-1">{farmer.farm_address || farmer.farm_city}</p>
+                               </div>
+                               <div className="flex gap-4">
+                                  <Clock className="w-4 h-4 text-[#5ba409] mt-0.5" />
+                                  <p className="text-[12px] text-gray-700 leading-tight flex-1">Estimated {navigationInfo?.duration || '32 mins'} drive</p>
+                               </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="space-y-3 pb-2">
+                            {reviewsLoadingFor === farmer.id ? (
+                              <p className="text-[12px] text-gray-500">Loading reviews...</p>
+                            ) : reviewsErrorByFarmerId[farmer.id] ? (
+                              <p className="text-[12px] text-red-500">{reviewsErrorByFarmerId[farmer.id]}</p>
+                            ) : (reviewsByFarmerId[farmer.id] || []).length === 0 ? (
+                              <p className="text-[12px] text-gray-500">No reviews yet for this farmer.</p>
+                            ) : (
+                              (reviewsByFarmerId[farmer.id] || []).slice(0, 4).map((review) => {
+                                const reviewStars = Math.max(0, Math.min(5, Number(review.rating) || 0));
+                                const reviewerName = `${String(review.reviewer_first_name || '').trim()} ${String(review.reviewer_last_name || '').trim()}`.trim() || 'Buyer';
+                                return (
+                                  <div key={review.fsr_id} className="rounded-xl border border-gray-100 bg-gray-50/40 p-3">
+                                    <div className="flex items-center justify-between">
+                                      <p className="text-[11px] font-bold text-gray-700">{reviewerName}</p>
+                                      <div className="flex items-center text-amber-500">
+                                        {[1, 2, 3, 4, 5].map((i) => (
+                                          <Star key={i} className={`w-3 h-3 ${i <= reviewStars ? 'fill-current' : 'text-gray-200'}`} />
+                                        ))}
+                                      </div>
+                                    </div>
+                                    <p className="mt-1 text-[12px] text-gray-600 leading-relaxed">{String(review.comment || '').trim() || 'No written comment.'}</p>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

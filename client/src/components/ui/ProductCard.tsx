@@ -21,7 +21,9 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const myUserId = Number(localStorage.getItem('agrilink_id') || localStorage.getItem('agrilink_userId'));
   const isOwnListing = Boolean(myUserId && product.sellerUserId && myUserId === product.sellerUserId);
   const userRole = localStorage.getItem('agrilink_role')?.toLowerCase() || 'buyer';
+  const isFarmer = userRole === 'farmer';
   const isAdmin = userRole === 'admin' || userRole === 'brgy_official' || userRole === 'lgu_official';
+  const canFavorite = !isAdmin && !isFarmer && Boolean(onToggleFavorite);
   const isArchived = product.status === 'archived' || (product as any).p_status === 'archived';
 
   const handleClick = () => {
@@ -29,13 +31,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
     else navigate(`/buyer/product/${product.id}`);
   };
 
-  const handleAddToCart = (e: React.MouseEvent) => {
+  const handleAddToCart = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isOutOfStock) {
       info('This item is sold out.');
       return;
     }
-    const result = cartService.addToCart(product, 1);
+    const result = await cartService.addToCart(product, 1);
     if (result.success) {
       if (result.message) {
         info(result.message);
@@ -86,7 +88,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
                  <span className="px-3 py-1 rounded-full bg-black/80 text-white text-[10px] font-black uppercase tracking-[0.2em]">Sold Out</span>
                </div>
              )}
-              {!isAdmin && (
+              {canFavorite && (
                 <button
                   onClick={handleFavoriteClick}
                   className={`absolute top-3 left-3 w-9 h-9 rounded-full flex items-center justify-center transition-all shadow-sm z-20 ${
@@ -189,7 +191,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
           </div>
         )}
 
-        {!isAdmin && (
+        {canFavorite && (
           <button
             onClick={handleFavoriteClick}
             className={`absolute top-4 left-4 w-9 h-9 rounded-full flex items-center justify-center transition-all shadow-xl shadow-black/5 z-20 ${
@@ -240,7 +242,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
                 {(product as any).avgRating > 0 ? (
                   <>
                     <Star size={11} className="fill-amber-400 text-amber-400" />
-                    <span className="text-[11px] font-black text-gray-900">{(product as any).avgRating.toFixed(1)} Rating</span>
+                    <span className="text-[11px] font-black text-gray-900">{(product as any).avgRating.toFixed(1)} Farmer Rating</span>
                   </>
                 ) : (
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">No ratings yet</span>

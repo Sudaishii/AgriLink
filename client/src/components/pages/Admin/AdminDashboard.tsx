@@ -3,8 +3,7 @@ import {
   ShoppingCart, 
   Users, 
   TrendingUp, 
-  Activity, 
-  FileText, 
+  Activity,
   ChevronRight, 
   ShieldCheck, 
   Clock 
@@ -67,6 +66,10 @@ const AdminDashboard: React.FC = () => {
   const totalCount = stats?.users || 1;
   const farmerPercent = (farmerCount / totalCount) * 100;
   const buyerPercent = (buyerCount / totalCount) * 100;
+  const platformEarnings = new Intl.NumberFormat('en-PH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(stats?.revenue || 0);
 
   return (
     <div className="min-h-screen bg-[#FDFDFD]">
@@ -85,15 +88,6 @@ const AdminDashboard: React.FC = () => {
             </h1>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Monitor Sales, Users, and Activity</p>
           </div>
-          
-          <div className="flex bg-gray-100/50 p-1 rounded-xl border border-gray-100 shrink-0">
-            <button onClick={() => navigate('/logs')} className="px-4 py-2 bg-white text-gray-900 shadow-sm rounded-lg text-[10px] font-black uppercase tracking-widest border border-gray-100 flex items-center gap-2">
-               <FileText size={12} /> Audit Logs
-            </button>
-            <button onClick={() => navigate('/admin/transaction-logs')} className="px-4 py-2 text-gray-400 hover:text-gray-900 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
-               System Logs
-            </button>
-          </div>
         </div>
       </div>
 
@@ -102,7 +96,7 @@ const AdminDashboard: React.FC = () => {
           <DashboardCard
             icon={TrendingUp}
             title="Market Sales"
-            value={isLoading ? '...' : `₱${(stats?.revenue || 0).toLocaleString()}`}
+            value={isLoading ? '...' : `₱${platformEarnings}`}
             subtitle="Platform Earnings"
             color="#5ba409"
             trend="Active Revenue"
@@ -143,7 +137,7 @@ const AdminDashboard: React.FC = () => {
                   <p className="text-xl font-black text-gray-900 tracking-tight mt-1">Recent Activity</p>
                 </div>
                 <button onClick={() => navigate('/admin/transaction-logs')} className="text-[10px] font-black text-[#5ba409] uppercase tracking-widest hover:underline">
-                  View System Logs
+                  View Transaction Logs
                 </button>
               </div>
               
@@ -227,3 +221,6 @@ const AdminDashboard: React.FC = () => {
 };
 
 export default AdminDashboard;
+
+
+

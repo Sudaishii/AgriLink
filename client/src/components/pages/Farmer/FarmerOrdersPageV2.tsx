@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../../api/apiConfig';
 import { useToast } from '../../ui/Toast';
 import OrderInvoiceModal from '../../ui/OrderInvoiceModal';
+import Modal from '../../ui/Modal';
 
 type OrderFilter = 'All' | 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled';
 
@@ -22,6 +23,9 @@ const FarmerOrdersPageV2: React.FC = () => {
   const [filter, setFilter] = useState<OrderFilter>('All');
   const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
   const [invoiceOrder, setInvoiceOrder] = useState<any | null>(null);
+  const [declineTargetOrder, setDeclineTargetOrder] = useState<any | null>(null);
+  const [declineReason, setDeclineReason] = useState('');
+  const [declineReasonError, setDeclineReasonError] = useState('');
 
   const userId = localStorage.getItem('agrilink_id');
 
@@ -59,7 +63,11 @@ const FarmerOrdersPageV2: React.FC = () => {
     };
   }, [userId]);
 
-  const handleUpdateStatus = async (orderId: number, newStatus: 'Confirmed' | 'Completed' | 'Cancelled') => {
+  const handleUpdateStatus = async (
+    orderId: number,
+    newStatus: 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled',
+    declineReasonText?: string
+  ) => {
     try {
       setUpdatingOrderId(orderId);
       const token = localStorage.getItem('agrilink_token');
@@ -69,11 +77,17 @@ const FarmerOrdersPageV2: React.FC = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ status: newStatus, u_id: userId }),
+        body: JSON.stringify({ status: newStatus, u_id: userId, declineReason: declineReasonText }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Request update failed.');
-      success(`Request marked as ${newStatus}.`);
+      if (newStatus === 'Cancelled') {
+        success('Request declined.');
+      } else if (newStatus === 'Pending') {
+        success('Order confirmation reverted to pending.');
+      } else {
+        success(`Request marked as ${newStatus}.`);
+      }
       await fetchOrders();
       window.dispatchEvent(new CustomEvent('order-updated'));
     } catch (err: any) {
@@ -83,7 +97,72 @@ const FarmerOrdersPageV2: React.FC = () => {
     }
   };
 
+  const openDeclineModal = (order: any) => {
+    setDeclineTargetOrder(order);
+    setDeclineReason('');
+    setDeclineReasonError('');
+  };
+
+  const handleConfirmDecline = async () => {
+    if (!declineTargetOrder) return;
+    const reason = declineReason.trim();
+    if (!reason) {
+      setDeclineReasonError('Decline reason is required.');
+      return;
+    }
+    setDeclineReasonError('');
+    await handleUpdateStatus(Number(declineTargetOrder.req_id), 'Cancelled', reason);
+    setDeclineTargetOrder(null);
+    setDeclineReason('');
+    setDeclineReasonError('');
+  };
+
+  const goToMessageBuyer = (order: any) => {
+    const buyerId = Number(order.buyer_id);
+    if (!Number.isFinite(buyerId) || buyerId <= 0) {
+      showError('Unable to open buyer conversation for this order.');
+      return;
+    }
+
+    const params = new URLSearchParams();
+    params.set('contactId', String(buyerId));
+    params.set('orderId', String(order.req_id || ''));
+    params.set('productId', String(order.product_id || ''));
+    params.set('productName', String(order.p_name || 'Product'));
+    params.set('productImage', String(order.p_image || ''));
+    params.set('productPrice', String(order.p_price || 0));
+    params.set('productUnit', String(order.p_unit || 'unit'));
+
+    const hasDeclineReason = String(order.req_status || '').toLowerCase() === 'cancelled' && String(order.decline_reason || '').trim();
+    if (hasDeclineReason) {
+      params.set(
+        'prefill',
+        `Hi ${order.buyer_first || 'Buyer'}, regarding order #${order.req_id} for ${order.p_name}, I had to decline this request. Reason: ${String(order.decline_reason).trim()}`
+      );
+    } else {
+      params.set(
+        'prefill',
+        `Hi ${order.buyer_first || 'Buyer'}, regarding order #${order.req_id} for ${order.p_name}.`
+      );
+    }
+
+    navigate(`/messages?${params.toString()}`);
+  };
+
   const filteredOrders = useMemo(() => orders.filter((o) => filter === 'All' || o.req_status === filter), [orders, filter]);
+
+  const getHarvestDate = (order: any) => {
+    const raw = order?.harvest_date;
+    if (!raw) return null;
+    const dt = new Date(raw);
+    return Number.isNaN(dt.getTime()) ? null : dt;
+  };
+
+  const isHarvestTimePassed = (order: any) => {
+    const harvestDate = getHarvestDate(order);
+    if (!harvestDate) return true;
+    return Date.now() >= harvestDate.getTime();
+  };
 
   const counts = useMemo(() => {
     const pending = orders.filter((o) => o.req_status === 'Pending').length;
@@ -205,6 +284,9 @@ const FarmerOrdersPageV2: React.FC = () => {
               const busy = updatingOrderId === order.req_id;
               const isPending = order.req_status === 'Pending';
               const isConfirmed = order.req_status === 'Confirmed';
+              const harvestDate = getHarvestDate(order);
+              const harvestPassed = isHarvestTimePassed(order);
+              const harvestLabel = harvestDate ? harvestDate.toLocaleString() : null;
 
               return (
                 <div
@@ -256,7 +338,7 @@ const FarmerOrdersPageV2: React.FC = () => {
                           </button>
                           <button
                             disabled={busy}
-                            onClick={() => handleUpdateStatus(order.req_id, 'Cancelled')}
+                            onClick={() => openDeclineModal(order)}
                             className="px-5 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 disabled:opacity-60 text-red-700 text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-2"
                           >
                             <XCircle className="w-4 h-4" />
@@ -266,14 +348,25 @@ const FarmerOrdersPageV2: React.FC = () => {
                       )}
 
                       {isConfirmed && (
-                        <button
-                          disabled={busy}
-                          onClick={() => handleUpdateStatus(order.req_id, 'Completed')}
-                          className="px-5 py-2.5 rounded-xl bg-[#2f6f2a] hover:bg-[#275f23] disabled:opacity-60 text-white text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-2"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          Mark Completed
-                        </button>
+                        <>
+                          <button
+                            disabled={busy}
+                            onClick={() => handleUpdateStatus(order.req_id, 'Pending')}
+                            className="px-5 py-2.5 rounded-xl bg-white hover:bg-gray-50 border border-gray-300 disabled:opacity-60 text-gray-700 text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-2"
+                          >
+                            <RefreshCcw className="w-4 h-4" />
+                            Revert to Pending
+                          </button>
+                          <button
+                            disabled={busy || !harvestPassed}
+                            onClick={() => handleUpdateStatus(order.req_id, 'Completed')}
+                            className="px-5 py-2.5 rounded-xl bg-[#2f6f2a] hover:bg-[#275f23] disabled:opacity-60 text-white text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-2"
+                            title={!harvestPassed && harvestLabel ? `Available after ${harvestLabel}` : 'Mark Completed'}
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            {harvestPassed ? 'Mark Completed' : 'Wait Harvest Time'}
+                          </button>
+                        </>
                       )}
 
                       {order.req_status === 'Completed' && (
@@ -290,7 +383,7 @@ const FarmerOrdersPageV2: React.FC = () => {
                       )}
 
                       <button
-                        onClick={() => navigate('/messages')}
+                        onClick={() => goToMessageBuyer(order)}
                         className="p-3 sm:px-5 sm:py-2.5 rounded-xl border border-gray-200 bg-white hover:border-emerald-300 text-gray-500 hover:text-[#5ba409] transition-all flex items-center gap-2 group/msg"
                       >
                         <MessageSquare className="w-5 h-5 group-hover/msg:rotate-12 transition-transform" />
@@ -298,6 +391,11 @@ const FarmerOrdersPageV2: React.FC = () => {
                       </button>
                     </div>
                   </div>
+                  {isConfirmed && !harvestPassed && harvestLabel && (
+                    <p className="mt-3 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 inline-block">
+                      Completion is locked until harvest time: {harvestLabel}
+                    </p>
+                  )}
                 </div>
               );
             })}
@@ -311,6 +409,57 @@ const FarmerOrdersPageV2: React.FC = () => {
         order={invoiceOrder}
         viewerRole="farmer"
       />
+
+      <Modal
+        isOpen={Boolean(declineTargetOrder)}
+        onClose={() => {
+          setDeclineTargetOrder(null);
+          setDeclineReason('');
+          setDeclineReasonError('');
+        }}
+        title="Decline Order"
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600">
+            Provide a reason for declining order <span className="font-semibold">#{declineTargetOrder?.req_id}</span>. This reason will be sent to the buyer.
+          </p>
+          <textarea
+            value={declineReason}
+            onChange={(e) => {
+              setDeclineReason(e.target.value);
+              if (declineReasonError) setDeclineReasonError('');
+            }}
+            placeholder="Enter decline reason..."
+            rows={4}
+            className={`w-full rounded-xl bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:ring-2 ${
+              declineReasonError
+                ? 'border border-red-300 focus:border-red-400 focus:ring-red-100'
+                : 'border border-slate-200 focus:border-emerald-400 focus:ring-emerald-100'
+            }`}
+          />
+          {declineReasonError && <p className="text-xs font-semibold text-red-600">{declineReasonError}</p>}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setDeclineTargetOrder(null);
+                setDeclineReason('');
+              }}
+              className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmDecline}
+              disabled={updatingOrderId === Number(declineTargetOrder?.req_id)}
+              className="flex-1 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+            >
+              {updatingOrderId === Number(declineTargetOrder?.req_id) ? 'Declining...' : 'Confirm Decline'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

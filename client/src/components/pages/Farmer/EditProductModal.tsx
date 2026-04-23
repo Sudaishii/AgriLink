@@ -421,7 +421,6 @@ const EditProductModal: React.FC<EditProductModalProps> = ({ productId, initialP
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
               >
                 <option>kg</option>
-                <option>tray</option>
                 <option>sack</option>
                 <option>piece</option>
               </select>

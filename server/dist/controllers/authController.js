@@ -10,7 +10,15 @@ const database_1 = require("../database/database");
 const webTemplates_1 = require("../templates/webTemplates");
 const systemLogService_1 = require("../services/systemLogService");
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PASSWORD_COMPLEXITY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
+const PASSWORD_COMPLEXITY_MESSAGE = 'Your password must contain a mix of uppercase and lowercase letters, numbers, and special characters.';
 const normalizeEmail = (value) => String(value ?? '').trim().toLowerCase();
+const normalizeLoginIdentifier = (value) => {
+    const raw = String(value ?? '').trim();
+    if (raw.toLowerCase() === 'agrilink')
+        return 'AgriLink';
+    return raw.toLowerCase();
+};
 const registerController = async (req, res) => {
     try {
         const { email, password, firstName, lastName, role_name, city, province } = req.body;
@@ -20,6 +28,9 @@ const registerController = async (req, res) => {
         }
         if (!EMAIL_REGEX.test(normalizedEmail)) {
             return res.status(400).json({ message: 'Please enter a valid email address' });
+        }
+        if (!PASSWORD_COMPLEXITY_REGEX.test(String(password))) {
+            return res.status(400).json({ message: PASSWORD_COMPLEXITY_MESSAGE });
         }
         const result = await (0, authService_1.registerUser)({ email: normalizedEmail, password, firstName, lastName, role_name, city, province });
         // System log: new user registration
@@ -57,6 +68,9 @@ const updatePasswordController = async (req, res) => {
         }
         if (String(newPassword).length < 8) {
             return res.status(400).json({ message: 'New password must be at least 8 characters.' });
+        }
+        if (!PASSWORD_COMPLEXITY_REGEX.test(String(newPassword))) {
+            return res.status(400).json({ message: PASSWORD_COMPLEXITY_MESSAGE });
         }
         if (currentPassword === newPassword) {
             return res.status(400).json({ message: 'New password must be different from current password.' });
@@ -146,11 +160,12 @@ exports.verifyController = verifyController;
 const loginController = async (req, res) => {
     try {
         const { email, password } = req.body;
-        const normalizedEmail = normalizeEmail(email);
+        const normalizedEmail = normalizeLoginIdentifier(email);
+        const isAdminLoginKey = normalizedEmail === 'AgriLink';
         if (!normalizedEmail || !password) {
             return res.status(400).json({ message: 'Email and password are required' });
         }
-        if (!EMAIL_REGEX.test(normalizedEmail)) {
+        if (!isAdminLoginKey && !EMAIL_REGEX.test(normalizedEmail)) {
             return res.status(400).json({ message: 'Please enter a valid email address' });
         }
         const result = await (0, authService_1.loginUser)({ email: normalizedEmail, password });
@@ -283,6 +298,9 @@ const resetPasswordByTokenController = async (req, res) => {
         const { token, newPassword } = req.body;
         if (!token || !newPassword)
             return res.status(400).json({ message: 'Token and new password required' });
+        if (!PASSWORD_COMPLEXITY_REGEX.test(String(newPassword))) {
+            return res.status(400).json({ message: PASSWORD_COMPLEXITY_MESSAGE });
+        }
         await (0, authService_1.resetPasswordByToken)(token, newPassword);
         // Audit Log
         (0, systemLogService_1.writeLog)({

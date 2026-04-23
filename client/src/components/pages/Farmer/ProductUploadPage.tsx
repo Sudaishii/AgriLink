@@ -398,7 +398,6 @@ const ProductUploadPage: React.FC = () => {
                                             className="w-36 bg-slate-50/80 border-2 border-transparent focus:bg-white focus:border-[#5ba409] px-7 py-4.5 rounded-[1.25rem] font-black text-xs transition-all outline-none uppercase italic shadow-sm hover:bg-slate-100/50 cursor-pointer"
                                         >
                                             <option className="font-black italic uppercase">kg</option>
-                                            <option className="font-black italic uppercase">tray</option>
                                             <option className="font-black italic uppercase">sack</option>
                                             <option className="font-black italic uppercase">piece</option>
                                         </select>

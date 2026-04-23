@@ -98,6 +98,11 @@ type FarmerProfile = {
     status?: string;
     description?: string;
   };
+  badges?: Array<{
+    badge_type?: string;
+    badge_label?: string;
+    revoked_at?: string | null;
+  }>;
   reviews?: Array<{
     r_id?: number;
     rating?: number;
@@ -119,6 +124,13 @@ const asText = (value: unknown, fallback = ''): string => {
   return out || fallback;
 };
 
+const nameInitials = (fullName: string): string => {
+  const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
+  return `${parts[0].slice(0, 1)}${parts[parts.length - 1].slice(0, 1)}`.toUpperCase();
+};
+
 const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -133,6 +145,7 @@ const ProductDetailPage: React.FC = () => {
 
   const token = localStorage.getItem('agrilink_token');
   const userRole = localStorage.getItem('agrilink_role')?.toLowerCase() || 'buyer';
+  const isFarmer = userRole === 'farmer';
   const isAdmin = userRole === 'admin' || userRole === 'brgy_official' || userRole === 'lgu_official';
 
   useEffect(() => {
@@ -288,6 +301,14 @@ const ProductDetailPage: React.FC = () => {
   };
 
   const handleViewFarmerOnMap = () => {
+    if (isAdmin) {
+      showInfo('Map view is unavailable for this role.');
+      return;
+    }
+    if (isOwnListing) {
+      showInfo('This is your own listing.');
+      return;
+    }
     const targetFarmerId = toNumber(product?.u_id ?? farmerProfile?.id);
     if (targetFarmerId <= 0) {
       showInfo('Farmer map location is unavailable right now.');
@@ -359,11 +380,22 @@ const ProductDetailPage: React.FC = () => {
   const farmerRating = toNumber(farmerProfile?.rating?.average, toNumber(averageRating));
   const farmerRatingCount = toNumber(farmerProfile?.rating?.count, reviewCount);
   const farmerSalesCount = toNumber(farmerProfile?.sales?.completed_orders, 0);
-  const farmerIsVerified = Boolean(toNumber(farmerProfile?.is_verified, 0));
-  const farmerOnboardingComplete = Boolean(toNumber(farmerProfile?.onboarding_completed, 0));
+  const farmerHasVerifiedBadge = Array.isArray(farmerProfile?.badges)
+    ? farmerProfile.badges.some((b) => String(b?.badge_type || '').toLowerCase() === 'verified_farmer' && !b?.revoked_at)
+    : false;
   const farmerRoleLabel = asText(farmerProfile?.role, 'farmer').toLowerCase() === 'farmer' ? 'Farmer' : 'Seller';
   const farmerId = toNumber(product.u_id ?? farmerProfile?.id);
+  const farmerInitials = nameInitials(farmerName);
   const isOwnListing = toNumber(localStorage.getItem('agrilink_id')) === farmerId && farmerId > 0;
+  const canOpenFarmerProfile = farmerId > 0;
+
+  const handleOpenFarmerProfile = () => {
+    if (!canOpenFarmerProfile) {
+      showInfo('Farmer profile is unavailable for this listing.');
+      return;
+    }
+    navigate(`/profile/${farmerId}`);
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
@@ -397,7 +429,7 @@ const ProductDetailPage: React.FC = () => {
                     <p className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-green-50 text-green-700 text-[11px] font-semibold">
                       <CheckCircle2 size={13} /> {category}
                     </p>
-                    {farmerIsVerified && (
+                    {farmerHasVerifiedBadge && (
                       <p className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 text-[11px] font-semibold border border-emerald-100">
                         <BadgeCheck size={13} className="fill-emerald-50" /> Verified Farmer
                       </p>
@@ -448,7 +480,7 @@ const ProductDetailPage: React.FC = () => {
 
               <div className="mt-6 flex flex-wrap gap-3">
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     const pObj: Product = {
                       id: toNumber(product.p_id),
                       name,
@@ -461,7 +493,7 @@ const ProductDetailPage: React.FC = () => {
                       image: imageUrl,
                       category,
                     };
-                    const result = cartService.addToCart(pObj, qty);
+                    const result = await cartService.addToCart(pObj, qty);
                     if (result.success) {
                       if (result.message) {
                         showInfo(result.message);
@@ -488,10 +520,10 @@ const ProductDetailPage: React.FC = () => {
 
                 <button
                   onClick={handleViewFarmerOnMap}
-                  disabled={isAdmin}
+                  disabled={isAdmin || isOwnListing}
                   className="h-11 px-5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed text-slate-700 text-sm font-semibold inline-flex items-center gap-2"
                 >
-                  <MapPin size={16} /> {isAdmin ? 'Map Disabled' : 'View on Map'}
+                  <MapPin size={16} /> {isOwnListing ? 'Your Listing' : isAdmin ? 'Map Disabled' : 'View on Map'}
                 </button>
               </div>
             </div>
@@ -499,7 +531,12 @@ const ProductDetailPage: React.FC = () => {
         </div>
 
         <div className="mt-4 bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={handleOpenFarmerProfile}
+            disabled={!canOpenFarmerProfile}
+            className="flex items-center gap-4 text-left disabled:cursor-not-allowed"
+          >
             <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-600 grid place-items-center overflow-hidden border border-slate-100">
               {farmerProfile?.profile_image ? (
                 <img 
@@ -508,14 +545,14 @@ const ProductDetailPage: React.FC = () => {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <User size={20} />
+                <span className="text-sm font-bold tracking-wide">{farmerInitials}</span>
               )}
             </div>
             <div>
-              <p className="text-sm font-semibold text-slate-900">{farmerName}</p>
+              <p className={`text-sm font-semibold ${canOpenFarmerProfile ? 'text-slate-900 hover:text-green-700' : 'text-slate-900'}`}>{farmerName}</p>
               <p className="text-xs text-slate-500">{[farmerCity, farmerProvince].filter(Boolean).join(', ') || 'Location not provided'}</p>
             </div>
-          </div>
+          </button>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 text-sm">
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Farm Name</p>
@@ -702,7 +739,7 @@ const ProductDetailPage: React.FC = () => {
                   <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
                     <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Status</p>
                     <p className="mt-1 text-sm font-bold text-slate-800">
-                      {farmerIsVerified || farmerOnboardingComplete ? 'Verified Seller' : 'Verification pending'}
+                      {farmerHasVerifiedBadge ? 'Verified Farmer (Barangay Certified)' : 'Verification pending'}
                     </p>
                   </div>
                 </div>
@@ -727,11 +764,11 @@ const ProductDetailPage: React.FC = () => {
                   )}
                   <button
                     onClick={handleViewFarmerOnMap}
-                    disabled={isAdmin}
+                    disabled={isAdmin || isOwnListing}
                     className="h-10 px-4 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed text-slate-700 text-xs font-semibold inline-flex items-center gap-2"
                   >
                     <MapPin size={14} />
-                    {isAdmin ? 'Map Disabled' : 'View on Map'}
+                    {isOwnListing ? 'Your Listing' : isAdmin ? 'Map Disabled' : 'View on Map'}
                   </button>
                 </div>
               </div>
@@ -751,13 +788,13 @@ const ProductDetailPage: React.FC = () => {
           </button>
           <button
             onClick={handleViewFarmerOnMap}
-            disabled={isAdmin}
+            disabled={isAdmin || isFarmer}
             className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold inline-flex items-center gap-1.5 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
           >
-            <MapPin size={14} /> {isAdmin ? 'Admin' : 'Map'}
+            <MapPin size={14} /> {isAdmin || isFarmer ? 'Map Disabled' : 'Map'}
           </button>
           <button
-            onClick={() => {
+            onClick={async () => {
               const pObj: Product = {
                 id: toNumber(product.p_id),
                 name,
@@ -770,7 +807,7 @@ const ProductDetailPage: React.FC = () => {
                 image: imageUrl,
                 category,
               };
-              const result = cartService.addToCart(pObj, qty);
+              const result = await cartService.addToCart(pObj, qty);
               if (result.success) {
                 if (result.message) {
                   showInfo(result.message);

@@ -64,11 +64,25 @@ const statusClasses: Record<string, string> = {
   canceled: 'bg-rose-100 text-rose-700 border-rose-200',
 };
 
+const STATUS_LABEL_FILIPINO: Record<string, string> = {
+  requested: 'Hiniling',
+  pending: 'Nakabinbin',
+  confirmed: 'Kumpirmado',
+  processing: 'Pinoproseso',
+  completed: 'Kumpleto',
+  cancelled: 'Tinanggihan',
+  canceled: 'Tinanggihan',
+};
+
 const inputClass =
   'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100';
 
 const sectionClass =
   'rounded-2xl border border-slate-200 bg-white shadow-sm';
+
+const PASSWORD_COMPLEXITY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
+const PASSWORD_COMPLEXITY_MESSAGE =
+  'Your password must contain a mix of uppercase and lowercase letters, numbers, and special characters.';
 
 type ToggleSwitchProps = {
   checked: boolean;
@@ -183,6 +197,14 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
     compactOrders: false,
   });
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const isFilipino = appSettings.language === 'fil-PH';
+  const localeTag = isFilipino ? 'fil-PH' : 'en-PH';
+  const t = (english: string, filipino: string) => (isFilipino ? filipino : english);
+  const getOrderStatusLabel = (rawStatus: string) => {
+    const normalized = String(rawStatus || '').trim().toLowerCase();
+    if (!isFilipino) return rawStatus;
+    return STATUS_LABEL_FILIPINO[normalized] || rawStatus;
+  };
 
   const isFarmer = (profile.userType || storedRole) === 'farmer';
   const isBrgy = (profile.userType || storedRole) === 'brgy_official';
@@ -259,6 +281,10 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
   }, [userId]);
 
   useEffect(() => {
+    document.documentElement.lang = localeTag;
+  }, [localeTag]);
+
+  useEffect(() => {
     const fetchData = async () => {
       try {
         if (!token || !userId) {
@@ -270,6 +296,9 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
         const profilePromise = fetch(`${API_BASE_URL}/users/${userId}`, {
           headers: baseHeaders,
         });
+        const alertsPromise = fetch(`${API_BASE_URL}/users/${userId}/alerts`, {
+          headers: baseHeaders,
+        });
         const salesOrdersPromise = fetch(`${API_BASE_URL}/purchases/farmer/${userId}`, {
           headers: baseHeaders,
         });
@@ -277,8 +306,9 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
           headers: baseHeaders,
         });
 
-        const [profileRes, salesOrdersRes, buyerOrdersRes] = await Promise.all([
+        const [profileRes, alertsRes, salesOrdersRes, buyerOrdersRes] = await Promise.all([
           profilePromise,
+          alertsPromise,
           salesOrdersPromise,
           buyerOrdersPromise,
         ]);
@@ -321,6 +351,15 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
           farmSnapshotRef.current = buildFarmSignature(nextProfile);
         } else {
           toast.error('Failed to load profile data.');
+        }
+
+        if (alertsRes.ok) {
+          const data = await alertsRes.json().catch(() => ({}));
+          setNotificationSettings((prev) => ({
+            ...prev,
+            orders: Boolean(data?.orders),
+            messages: Boolean(data?.messages),
+          }));
         }
 
         if (salesOrdersRes.ok) {
@@ -832,9 +871,20 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
   };
 
   const handleSaveAlerts = async () => {
-    if (!userId) return;
+    if (!userId || !token) return;
     setAlertsSaving(true);
     try {
+      const response = await fetch(`${API_BASE_URL}/users/${userId}/alerts`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(notificationSettings),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to persist alert preferences.');
+      }
       localStorage.setItem(`profile_alerts_${userId}`, JSON.stringify(notificationSettings));
       toast.success('Alert preferences saved.');
     } catch {
@@ -849,9 +899,9 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
     setSettingsSaving(true);
     try {
       localStorage.setItem(`profile_settings_${userId}`, JSON.stringify(appSettings));
-      toast.success('Settings saved.');
+      toast.success(isFilipino ? 'Nai-save ang settings.' : 'Settings saved.');
     } catch {
-      toast.error('Unable to save settings.');
+      toast.error(isFilipino ? 'Hindi ma-save ang settings.' : 'Unable to save settings.');
     } finally {
       setSettingsSaving(false);
     }
@@ -867,6 +917,10 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
 
     if (newPassword.length < 8) {
       toast.error('New password must be at least 8 characters.');
+      return;
+    }
+    if (!PASSWORD_COMPLEXITY_REGEX.test(newPassword)) {
+      toast.error(PASSWORD_COMPLEXITY_MESSAGE);
       return;
     }
 
@@ -1425,14 +1479,14 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
             {activeSection === 'password' && (
               <section className={`${sectionClass} space-y-4 p-6`}>
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-900">Change Password</h2>
-                  <p className="text-sm text-slate-500">Use a strong password with at least 8 characters.</p>
+                  <h2 className="text-lg font-semibold text-slate-900">{t('Security', 'Seguridad')}</h2>
+                  <p className="text-sm text-slate-500">{t('Update your password in this single Security section.', 'Dito lang sa Security section i-update ang iyong password.')}</p>
                 </div>
-                <input className={inputClass} type="password" placeholder="Current password" value={passwordData.currentPassword} onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })} />
-                <input className={inputClass} type="password" placeholder="New password" value={passwordData.newPassword} onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })} />
-                <input className={inputClass} type="password" placeholder="Confirm new password" value={passwordData.confirmPassword} onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })} />
+                <input className={inputClass} type="password" placeholder={t('Current password', 'Kasalukuyang password')} value={passwordData.currentPassword} onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })} />
+                <input className={inputClass} type="password" placeholder={t('New password', 'Bagong password')} value={passwordData.newPassword} onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })} />
+                <input className={inputClass} type="password" placeholder={t('Confirm new password', 'Kumpirmahin ang bagong password')} value={passwordData.confirmPassword} onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })} />
                 <button onClick={handleUpdatePassword} disabled={passwordLoading} className="rounded-xl bg-[#5ba409] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4d8f08] disabled:opacity-60">
-                  {passwordLoading ? 'Updating...' : 'Update Password'}
+                  {passwordLoading ? t('Updating...', 'Ina-update...') : t('Update Password', 'I-update ang Password')}
                 </button>
               </section>
             )}
@@ -1683,12 +1737,15 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-5">
                   <div>
                     <h2 className="text-lg font-semibold text-slate-900">
-                      {isFarmer && orderScope === 'sales' ? 'Product Orders' : 'My Orders'} ({activeOrders.length})
+                      {isFarmer && orderScope === 'sales'
+                        ? t('Product Orders', 'Mga Order ng Produkto')
+                        : t('My Orders', 'Aking Mga Order')}{' '}
+                      ({activeOrders.length})
                     </h2>
                     <p className="text-sm text-slate-500">
                       {isFarmer && orderScope === 'sales'
-                        ? 'Orders placed for your listed products.'
-                        : 'Orders you placed as a buyer account.'}
+                        ? t('Orders placed for your listed products.', 'Mga order para sa iyong mga nakalistang produkto.')
+                        : t('Orders you placed as a buyer account.', 'Mga order na inilagay mo bilang buyer account.')}
                     </p>
                   </div>
 
@@ -1704,7 +1761,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
                               : 'text-slate-600 hover:bg-slate-100'
                           }`}
                         >
-                          Product Orders
+                          {t('Product Orders', 'Order ng Produkto')}
                         </button>
                         <button
                           type="button"
@@ -1715,25 +1772,29 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
                               : 'text-slate-600 hover:bg-slate-100'
                           }`}
                         >
-                          My Orders
+                          {t('My Orders', 'Aking Order')}
                         </button>
                       </div>
                     )}
                     <select value={orderStatusFilter} onChange={(e) => setOrderStatusFilter(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
                       {orderStatuses.map((status) => (
-                        <option key={status} value={status}>{status === 'all' ? 'All Statuses' : status}</option>
+                        <option key={status} value={status}>
+                          {status === 'all' ? t('All Statuses', 'Lahat ng Status') : getOrderStatusLabel(status)}
+                        </option>
                       ))}
                     </select>
                     <select value={orderSort} onChange={(e) => setOrderSort(e.target.value as 'latest' | 'oldest')} className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
-                      <option value="latest">Latest</option>
-                      <option value="oldest">Oldest</option>
+                      <option value="latest">{t('Latest', 'Pinakabago')}</option>
+                      <option value="oldest">{t('Oldest', 'Pinakaluma')}</option>
                     </select>
                   </div>
                 </div>
 
-                <div className="p-4 space-y-3">
+                <div className={appSettings.compactOrders ? 'p-3 space-y-2' : 'p-4 space-y-3'}>
                   {filteredOrders.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-slate-200 p-10 text-center text-sm text-slate-500">No orders found for the selected filters.</div>
+                    <div className="rounded-xl border border-dashed border-slate-200 p-10 text-center text-sm text-slate-500">
+                      {t('No orders found for the selected filters.', 'Walang nahanap na order para sa napiling filter.')}
+                    </div>
                   ) : (
                     filteredOrders.map((order) => {
                       const status = (order.req_status || 'Unknown').toLowerCase();
@@ -1746,7 +1807,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
                       const counterpart = showingSales
                         ? `${order.buyer_first || ''} ${order.buyer_last || ''}`.trim() || 'Buyer'
                         : `${order.farmer_first || ''} ${order.farmer_last || ''}`.trim() || 'Farmer';
-                      const dateText = new Date(order.req_date || order.created_at || '').toLocaleDateString();
+                      const dateText = new Date(order.req_date || order.created_at || '').toLocaleDateString(localeTag);
                       const amount = Number(order.quantity || 0) * Number(order.p_price || 0);
                       const invoiceNumber = String(order.invoice_number || '').trim();
                       const isInvoiceHighlighted =
@@ -1757,10 +1818,10 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
                       return (
                         <article
                           key={order.req_id}
-                          className={`rounded-xl border border-slate-200 flex cursor-pointer flex-col md:flex-row md:items-center ${appSettings.compactOrders ? 'p-3 gap-3' : 'p-4 gap-4'} hover:border-[#5ba409]/40 hover:bg-[#f8fce8]`}
+                          className={`rounded-xl border border-slate-200 flex cursor-pointer flex-col md:flex-row md:items-center ${appSettings.compactOrders ? 'p-2.5 gap-2.5' : 'p-4 gap-4'} hover:border-[#5ba409]/40 hover:bg-[#f8fce8]`}
                           onClick={() => setInvoiceOrder(order)}
                         >
-                          <div className="h-16 w-16 rounded-lg overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
+                          <div className={`${appSettings.compactOrders ? 'h-14 w-14' : 'h-16 w-16'} rounded-lg overflow-hidden border border-slate-200 bg-slate-100 shrink-0`}>
                             {order.p_image ? (
                               <img src={getFullImageUrl(order.p_image)} alt={order.p_name || 'Product'} className="h-full w-full object-cover" />
                             ) : (
@@ -1769,20 +1830,22 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
                           </div>
 
                           <div className="flex-1 min-w-0">
-                            <p className="truncate text-sm font-semibold text-slate-900">{order.p_name || 'Untitled Product'}</p>
-                            <p className="text-xs text-slate-500">
-                              Order #{order.req_id} - {dateText}
-                              {invoiceNumber ? ` - Order ID ${invoiceNumber}` : ''}
+                            <p className={`${appSettings.compactOrders ? 'text-[13px]' : 'text-sm'} truncate font-semibold text-slate-900`}>{order.p_name || 'Untitled Product'}</p>
+                            <p className={`${appSettings.compactOrders ? 'text-[11px]' : 'text-xs'} text-slate-500`}>
+                              {t('Order', 'Order')} #{order.req_id} - {dateText}
+                              {invoiceNumber ? ` - ${t('Order ID', 'Order ID')} ${invoiceNumber}` : ''}
                             </p>
-                            <p className="mt-1 text-xs text-slate-500">
-                              {showingSales ? 'Buyer' : 'Farmer'}: <span className="font-medium text-slate-700">{counterpart}</span>
+                            <p className={`${appSettings.compactOrders ? 'mt-0.5 text-[11px]' : 'mt-1 text-xs'} text-slate-500`}>
+                              {showingSales ? t('Buyer', 'Mamimili') : t('Farmer', 'Magsasaka')}: <span className="font-medium text-slate-700">{counterpart}</span>
                             </p>
                           </div>
 
                           <div className="md:text-right space-y-1">
-                            <p className="text-sm font-semibold text-slate-900">PHP {amount.toLocaleString()}</p>
+                            <p className={`${appSettings.compactOrders ? 'text-[13px]' : 'text-sm'} font-semibold text-slate-900`}>
+                              {new Intl.NumberFormat(localeTag, { style: 'currency', currency: 'PHP' }).format(amount)}
+                            </p>
                             <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-medium capitalize ${badgeClass}`}>
-                              {order.req_status}
+                              {getOrderStatusLabel(order.req_status)}
                             </span>
                             {isCancelledStatus && (
                               <div>
@@ -1846,8 +1909,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
               <section className={`${sectionClass} p-6`}>
                 <div className="mb-5 flex items-center justify-between">
                   <div>
-                    <h2 className="text-lg font-semibold text-slate-900">Platform Settings</h2>
-                    <p className="text-sm text-slate-500">Configure your global account preferences.</p>
+                    <h2 className="text-lg font-semibold text-slate-900">{t('Platform Settings', 'Mga Setting ng Platform')}</h2>
+                    <p className="text-sm text-slate-500">{t('Configure your global account preferences.', 'I-configure ang iyong pangkalahatang account preferences.')}</p>
                   </div>
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
                     <Globe2 size={18} />
@@ -1856,8 +1919,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
 
                 <div className="space-y-4">
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <h3 className="text-sm font-semibold text-slate-900">Language & Region</h3>
-                    <p className="mb-3 text-xs text-slate-500">Set your preferred language and regional formats.</p>
+                    <h3 className="text-sm font-semibold text-slate-900">{t('Language & Region', 'Wika at Rehiyon')}</h3>
+                    <p className="mb-3 text-xs text-slate-500">{t('Set your preferred language and regional formats.', 'Itakda ang nais mong wika at format ng rehiyon.')}</p>
                     <select
                       className={inputClass}
                       value={appSettings.language}
@@ -1871,8 +1934,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div className="mb-4 flex items-center justify-between gap-4">
                       <div>
-                        <h3 className="text-sm font-semibold text-slate-900">Compact Order View</h3>
-                        <p className="text-xs text-slate-500">Reduce spacing in your Orders list for faster scanning.</p>
+                        <h3 className="text-sm font-semibold text-slate-900">{t('Compact Order View', 'Compact na View ng Order')}</h3>
+                        <p className="text-xs text-slate-500">{t('Reduce spacing in your Orders list for faster scanning.', 'Bawasan ang pagitan sa listahan ng order para mas mabilis makita.')}</p>
                       </div>
                       <ToggleSwitch
                         checked={appSettings.compactOrders}
@@ -1888,7 +1951,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
                       disabled={settingsSaving}
                       className="rounded-xl bg-[#5ba409] px-6 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-600/20 hover:bg-[#4d8f08] transform hover:-translate-y-0.5 transition-all active:scale-95 disabled:opacity-60"
                     >
-                      {settingsSaving ? 'Saving Changes...' : 'Save Preferences'}
+                      {settingsSaving ? t('Saving Changes...', 'Sine-save...') : t('Save Preferences', 'I-save ang Preferences')}
                     </button>
                   </div>
                 </div>

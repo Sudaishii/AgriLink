@@ -6,6 +6,8 @@ import {
   getAllFarmers,
   getPublicFarmerProfile,
   getMessagingContact,
+  getAlertPreferences,
+  updateAlertPreferences,
   getAllUsers,
   updateUserStatus,
   getAdminStats,
@@ -21,6 +23,8 @@ export const userRoutes = express.Router();
 userRoutes.get('/farmers/all', getAllFarmers);
 userRoutes.get('/public/:userId', getPublicFarmerProfile);
 userRoutes.get('/contact/:userId', authenticateToken, getMessagingContact);
+userRoutes.get('/:userId/alerts', authenticateToken, getAlertPreferences);
+userRoutes.put('/:userId/alerts', authenticateToken, updateAlertPreferences);
 
 userRoutes.put('/:userId/onboarding', authenticateToken, updateOnboardingStatus);
 userRoutes.put(

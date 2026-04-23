@@ -286,7 +286,6 @@ const AddProductModalV2: React.FC<AddProductModalProps> = ({ isOpen, onClose, on
                         className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#5ba409]/20"
                       >
                         <option value="kg">kg</option>
-                        <option value="tray">tray</option>
                         <option value="sack">sack</option>
                         <option value="piece">piece</option>
                       </select>

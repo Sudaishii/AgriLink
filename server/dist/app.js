@@ -48,6 +48,7 @@ const notificationRoutes_1 = __importDefault(require("./routes/notificationRoute
 const reviewRoutes_1 = __importDefault(require("./routes/reviewRoutes"));
 const badgeRoutes_1 = __importDefault(require("./routes/badgeRoutes"));
 const systemLogRoutes_1 = __importDefault(require("./routes/systemLogRoutes"));
+const cartRoutes_1 = __importDefault(require("./routes/cartRoutes"));
 const requestLoggerMiddleware_1 = require("./middleware/requestLoggerMiddleware");
 const app = (0, express_1.default)();
 // Custom CORS Middleware
@@ -107,6 +108,7 @@ app.use('/api/notifications', notificationRoutes_1.default);
 app.use('/api/reviews', reviewRoutes_1.default);
 app.use('/api/badges', badgeRoutes_1.default);
 app.use('/api/logs', systemLogRoutes_1.default);
+app.use('/api/cart', cartRoutes_1.default);
 app.use('/api/search', searchRoutes_1.default);
 // --- GLOBAL ERROR HANDLER ---
 app.use((err, req, res, next) => {

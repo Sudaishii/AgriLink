@@ -5,6 +5,10 @@ import type { RegisterFormData } from '../../types';
 import { API_BASE_URL } from '../../api/apiConfig';
 import { useToast } from '../ui/Toast';
 
+const PASSWORD_COMPLEXITY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
+const PASSWORD_COMPLEXITY_MESSAGE =
+  'Your password must contain a mix of uppercase and lowercase letters, numbers, and special characters.';
+
 interface RegisterPageProps {
   onLogin: (role: string) => void;
 }
@@ -110,6 +114,8 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onLogin }) => {
     if (!formData.password) newErrors.password = 'Password is required' as any;
     if (formData.password && formData.password.length < 8) {
       newErrors.password = 'Password must be at least 8 characters' as any;
+    } else if (formData.password && !PASSWORD_COMPLEXITY_REGEX.test(formData.password)) {
+      newErrors.password = PASSWORD_COMPLEXITY_MESSAGE as any;
     }
     if (!formData.confirmPassword) newErrors.confirmPassword = 'Please confirm your password' as any;
     if (formData.password !== formData.confirmPassword)
@@ -391,6 +397,8 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onLogin }) => {
                       
                       if (val && val.length < 8) {
                         setErrors(prev => ({ ...prev, password: 'Password must be at least 8 characters' }));
+                      } else if (val && !PASSWORD_COMPLEXITY_REGEX.test(val)) {
+                        setErrors(prev => ({ ...prev, password: PASSWORD_COMPLEXITY_MESSAGE }));
                       } else {
                         setErrors(prev => ({ ...prev, password: undefined }));
                       }

@@ -10,6 +10,7 @@ import notificationRoutes from './routes/notificationRoutes';
 import reviewRoutes from './routes/reviewRoutes';
 import badgeRoutes from './routes/badgeRoutes';
 import systemLogRoutes from './routes/systemLogRoutes';
+import cartRoutes from './routes/cartRoutes';
 import { requestLoggerMiddleware } from './middleware/requestLoggerMiddleware';
 
 const app = express();
@@ -83,6 +84,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/badges', badgeRoutes);
 app.use('/api/logs', systemLogRoutes);
+app.use('/api/cart', cartRoutes);
 app.use('/api/search', searchRoutes);
 
 // --- GLOBAL ERROR HANDLER ---

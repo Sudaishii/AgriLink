@@ -4,6 +4,10 @@ import { Lock, Loader2, CheckCircle2, ShieldCheck, Eye, EyeOff } from 'lucide-re
 import { API_BASE_URL } from '../../api/apiConfig';
 import { useToast } from '../ui/Toast';
 
+const PASSWORD_COMPLEXITY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
+const PASSWORD_COMPLEXITY_MESSAGE =
+  'Your password must contain a mix of uppercase and lowercase letters, numbers, and special characters.';
+
 const ResetPasswordPage: React.FC = () => {
     const [searchParams] = useSearchParams();
     const token = searchParams.get('token');
@@ -20,6 +24,7 @@ const ResetPasswordPage: React.FC = () => {
         
         if (!token) return toast.error('Reset token is missing.');
         if (newPassword.length < 8) return toast.error('Password must be at least 8 characters.');
+        if (!PASSWORD_COMPLEXITY_REGEX.test(newPassword)) return toast.error(PASSWORD_COMPLEXITY_MESSAGE);
         if (newPassword !== confirmPassword) return toast.error('Passwords do not match.');
 
         setLoading(true);

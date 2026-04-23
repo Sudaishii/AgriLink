@@ -116,6 +116,7 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
+  const appliedContextDraftRef = useRef('');
 
   const myUserId = useMemo(() => {
     return Number(localStorage.getItem('agrilink_id') || localStorage.getItem('agrilink_userId') || 0);
@@ -126,6 +127,13 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
   const prefillContactName = String(searchParams.get('contactName') || '').trim();
   const prefillContactImage = String(searchParams.get('contactImage') || '').trim();
   const prefillContactRole = String(searchParams.get('contactRole') || '').trim();
+  const orderIdParam = String(searchParams.get('orderId') || '').trim();
+  const productIdParam = String(searchParams.get('productId') || '').trim();
+  const productNameParam = String(searchParams.get('productName') || '').trim();
+  const productImageParam = String(searchParams.get('productImage') || '').trim();
+  const productPriceParam = String(searchParams.get('productPrice') || '').trim();
+  const productUnitParam = String(searchParams.get('productUnit') || '').trim();
+  const prefillMessageParam = String(searchParams.get('prefill') || '').trim();
 
   const filteredConversations = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -358,7 +366,7 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
     }
   }, [isProductLinkerOpen, selectedConversation?.participantId, isFarmer, fetchFarmerProducts]);
 
-  const insertProductLink = useCallback((product: any) => {
+  const insertProductBadge = useCallback((product: any) => {
     const editor = editorRef.current;
     if (!editor) return;
 
@@ -377,9 +385,13 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
       setMessageText(editorRef.current.innerText);
     }
 
+  }, []);
+
+  const insertProductLink = useCallback((product: any) => {
+    insertProductBadge(product);
     setIsProductLinkerOpen(false);
     setProductSearch('');
-  }, []);
+  }, [insertProductBadge]);
 
   const handleLinkClick = useCallback(async (productId: string, productName: string) => {
     try {
@@ -538,6 +550,65 @@ const MessagesPage: React.FC<MessagesPageProps> = ({ userType = 'buyer' }) => {
     ensureConversation,
     fetchContactProfile,
     selectedConversation?.participantId,
+  ]);
+
+  useEffect(() => {
+    if (!selectedConversation) return;
+    if (!Number.isFinite(contactId) || contactId <= 0) return;
+    if (String(selectedConversation.participantId) !== String(contactId)) return;
+
+    const hasContext =
+      Boolean(prefillMessageParam) ||
+      Boolean(orderIdParam) ||
+      (Boolean(productIdParam) && Boolean(productNameParam));
+    if (!hasContext) return;
+
+    const contextKey = [
+      contactId,
+      orderIdParam,
+      productIdParam,
+      productNameParam,
+      productImageParam,
+      productPriceParam,
+      productUnitParam,
+      prefillMessageParam,
+    ].join('|');
+
+    if (appliedContextDraftRef.current === contextKey) return;
+
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    editor.innerHTML = '';
+    if (prefillMessageParam) {
+      editor.appendChild(document.createTextNode(prefillMessageParam));
+      editor.appendChild(document.createTextNode(' '));
+    }
+
+    if (productIdParam && productNameParam) {
+      insertProductBadge({
+        p_id: productIdParam,
+        p_name: productNameParam,
+        p_image: productImageParam || '',
+        p_price: Number(productPriceParam || 0),
+        p_unit: productUnitParam || 'unit',
+      });
+    } else {
+      setMessageText(editor.innerText);
+    }
+
+    appliedContextDraftRef.current = contextKey;
+  }, [
+    contactId,
+    insertProductBadge,
+    orderIdParam,
+    prefillMessageParam,
+    productIdParam,
+    productImageParam,
+    productNameParam,
+    productPriceParam,
+    productUnitParam,
+    selectedConversation,
   ]);
 
   useEffect(() => {

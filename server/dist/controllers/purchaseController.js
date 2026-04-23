@@ -124,11 +124,12 @@ const updateOrderStatus = async (req, res) => {
     try {
         const req_id = parseInt(req.params.req_id);
         const status = req.body?.status;
+        const declineReason = req.body?.declineReason;
         const u_id = req.user?.id || req.body?.u_id;
         if (!status || !u_id) {
             return res.status(400).json({ message: 'Missing status or user identification.' });
         }
-        await purchaseService.updateOrderStatus(req_id, status, parseInt(u_id), notificationService_1.notificationService);
+        await purchaseService.updateOrderStatus(req_id, status, parseInt(u_id), notificationService_1.notificationService, declineReason);
         res.json({ message: 'Order status updated.' });
         // System log: Order status update
         (0, systemLogService_1.writeLog)({
@@ -148,7 +149,23 @@ const updateOrderStatus = async (req, res) => {
         }).catch(() => { });
     }
     catch (error) {
-        res.status(500).json({ message: error.message || 'Error updating order status.' });
+        const message = error.message || 'Error updating order status.';
+        if (message === 'Decline reason is required.') {
+            return res.status(400).json({ message });
+        }
+        if (message === 'Insufficient stock to confirm this order.') {
+            return res.status(400).json({ message });
+        }
+        if (message.startsWith('Cannot complete order before harvest time')) {
+            return res.status(400).json({ message });
+        }
+        if (message.startsWith('Invalid order status transition')) {
+            return res.status(400).json({ message });
+        }
+        if (message === 'Unauthorized or order not found.') {
+            return res.status(403).json({ message });
+        }
+        res.status(500).json({ message });
     }
 };
 exports.updateOrderStatus = updateOrderStatus;

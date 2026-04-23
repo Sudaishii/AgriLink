@@ -180,56 +180,66 @@ const FarmerEarningsPageV2: React.FC = () => {
               <h2 className="text-xl font-black text-gray-900">Transaction History</h2>
               <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Recent completed orders</p>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-100 flex items-center gap-2">
-                <ShoppingBag className="w-4 h-4" />
-                <span className="text-xs font-black uppercase tracking-widest">{completedOrders.length} Completed</span>
-              </div>
+            <div className="px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-100 flex items-center gap-2">
+              <ShoppingBag className="w-4 h-4" />
+              <span className="text-xs font-black uppercase tracking-widest">{completedOrders.length} Completed</span>
             </div>
           </div>
-          <div className="overflow-x-auto px-4 pb-4">
-            <table className="w-full text-left border-separate border-spacing-y-2">
-              <thead>
-                <tr className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">
-                  <th className="pb-4 px-4">Timeline</th>
-                  <th className="pb-4 px-4">Product Details</th>
-                  <th className="pb-4 px-4">Buyer Entity</th>
-                  <th className="pb-4 px-4">Volume</th>
-                  <th className="pb-4 px-4 text-right">Net Revenue</th>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left min-w-[820px]">
+              <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                <tr>
+                  <th className="px-5 py-3.5">Date</th>
+                  <th className="px-5 py-3.5">Product</th>
+                  <th className="px-5 py-3.5">Buyer</th>
+                  <th className="px-5 py-3.5">Quantity</th>
+                  <th className="px-5 py-3.5">Status</th>
+                  <th className="px-5 py-3.5 text-right">Revenue</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  [1, 2, 3].map((i) => (
-                    <tr key={i} className="animate-pulse">
-                      <td className="py-4 px-4 bg-gray-50 rounded-l-2xl border border-gray-100 border-r-0"><div className="h-4 bg-gray-200 rounded w-24" /></td>
-                      <td className="py-4 px-4 bg-gray-50 border-y border-gray-100"><div className="h-4 bg-gray-200 rounded w-32" /></td>
-                      <td className="py-4 px-4 bg-gray-50 border-y border-gray-100"><div className="h-4 bg-gray-200 rounded w-28" /></td>
-                      <td className="py-4 px-4 bg-gray-50 border-y border-gray-100"><div className="h-4 bg-gray-200 rounded w-16" /></td>
-                      <td className="py-4 px-4 bg-gray-50 rounded-r-2xl border border-gray-100 border-l-0 text-right"><div className="h-4 bg-gray-200 rounded w-20 ml-auto" /></td>
+                  [1, 2, 3, 4].map((i) => (
+                    <tr key={i} className="animate-pulse border-t border-gray-100">
+                      <td className="px-5 py-4"><div className="h-4 bg-gray-100 rounded w-24" /></td>
+                      <td className="px-5 py-4"><div className="h-4 bg-gray-100 rounded w-32" /></td>
+                      <td className="px-5 py-4"><div className="h-4 bg-gray-100 rounded w-28" /></td>
+                      <td className="px-5 py-4"><div className="h-4 bg-gray-100 rounded w-16" /></td>
+                      <td className="px-5 py-4"><div className="h-6 bg-gray-100 rounded-full w-20" /></td>
+                      <td className="px-5 py-4 text-right"><div className="h-4 bg-gray-100 rounded w-20 ml-auto" /></td>
                     </tr>
                   ))
                 ) : completedOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-24 text-center text-gray-300 font-bold uppercase text-[10px] tracking-widest bg-gray-50 rounded-2xl">No sales recorded in the system</td>
+                    <td colSpan={6} className="p-12 text-center text-gray-500">No sales recorded in the system.</td>
                   </tr>
                 ) : (
                   completedOrders.map((o) => (
-                    <tr key={o.req_id} className="group hover:bg-gray-50 transition-all duration-300">
-                      <td className="py-5 px-4 rounded-l-2xl border border-gray-100 border-r-0 group-hover:bg-emerald-50/40">
-                        <span className="text-[11px] font-black text-gray-400 uppercase tracking-tighter bg-gray-50 px-2.5 py-1 rounded-lg">{new Date(o.req_date).toLocaleDateString()}</span>
+                    <tr key={o.req_id} className="border-t border-gray-100 hover:bg-emerald-50/30 transition-colors">
+                      <td className="px-5 py-4">
+                        <span className="text-[11px] font-bold text-gray-500 bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-lg">
+                          {new Date(o.req_date).toLocaleDateString()}
+                        </span>
                       </td>
-                      <td className="py-5 px-4 border-y border-gray-100 group-hover:bg-emerald-50/40">
-                        <p className="text-sm font-black text-gray-900 group-hover:text-emerald-700 transition-colors uppercase italic">{o.p_name}</p>
+                      <td className="px-5 py-4">
+                        <p className="font-bold text-gray-900">{o.p_name}</p>
                       </td>
-                      <td className="py-5 px-4 border-y border-gray-100 group-hover:bg-emerald-50/40">
-                        <p className="text-sm font-bold text-gray-600">{o.buyer_first} {o.buyer_last}</p>
+                      <td className="px-5 py-4 text-sm text-gray-700 font-semibold">
+                        {o.buyer_first} {o.buyer_last}
                       </td>
-                      <td className="py-5 px-4 border-y border-gray-100 group-hover:bg-emerald-50/40">
-                        <p className="text-sm font-black text-gray-500 italic">{o.quantity} <span className="text-[10px] uppercase font-bold not-italic">{o.p_unit}</span></p>
+                      <td className="px-5 py-4 text-sm text-gray-700 font-semibold">
+                        {o.quantity} {o.p_unit}
                       </td>
-                      <td className="py-5 px-4 border border-gray-100 border-l-0 rounded-r-2xl text-right group-hover:bg-emerald-50/40">
-                        <p className="text-[15px] font-black text-emerald-600">PHP {(Number(o.quantity || 0) * Number(o.p_price || 0)).toLocaleString()}</p>
+                      <td className="px-5 py-4">
+                        <span className="px-2.5 py-1 text-xs rounded-full border font-semibold bg-emerald-50 text-emerald-700 border-emerald-200">
+                          Completed
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <p className="text-sm font-black text-emerald-700">
+                          PHP {(Number(o.quantity || 0) * Number(o.p_price || 0)).toLocaleString()}
+                        </p>
                       </td>
                     </tr>
                   ))

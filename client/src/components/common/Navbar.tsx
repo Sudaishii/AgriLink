@@ -7,6 +7,7 @@ import { useMessaging } from '../../contexts/MessagingContext';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { getFullImageUrl } from '../../api/apiConfig';
 import { normalizeNotificationLink } from '../../utils/notificationLinks';
+import { getCartCount, syncCartFromServer } from '../../services/cartService';
 
 const normalizePreviewText = (value: string) => {
   let raw = String(value || '').trim();
@@ -40,20 +41,23 @@ const Navbar: React.FC<NavbarProps> = ({ userType, firstName, lastName, profileI
     : '/';
 
   useEffect(() => {
-    const updateCount = () => {
-      const cart = localStorage.getItem('agrilink_cart');
-      if (cart) {
-        const items = JSON.parse(cart) as Array<{ quantity?: number }>;
-        const count = items.reduce((acc: number, item) => acc + (item.quantity || 1), 0);
-        setCartCount(count);
-      } else {
+    const updateCount = async () => {
+      const hasSession =
+        isLoggedIn ||
+        localStorage.getItem('agrilink_isLoggedIn') === 'true' ||
+        Boolean(localStorage.getItem('agrilink_token'));
+      if (!hasSession) {
         setCartCount(0);
+        return;
       }
+      await syncCartFromServer();
+      setCartCount(getCartCount());
     };
-    updateCount();
-    window.addEventListener('cart-updated', updateCount);
-    return () => window.removeEventListener('cart-updated', updateCount);
-  }, []);
+    void updateCount();
+    const onCartUpdated = () => void updateCount();
+    window.addEventListener('cart-updated', onCartUpdated);
+    return () => window.removeEventListener('cart-updated', onCartUpdated);
+  }, [isLoggedIn]);
 
   const normalizedUserType = userType.toLowerCase();
   const isFarmer = normalizedUserType === 'farmer';

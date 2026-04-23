@@ -1,11 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAdminActivityHistory = exports.getAdminStats = exports.updateUserStatus = exports.inviteOfficial = exports.getAllUsers = exports.getAllFarmers = exports.getMessagingContact = exports.getPublicFarmerProfile = exports.updateUserProfile = exports.getUserProfile = exports.updateOnboardingStatus = void 0;
+exports.getAdminActivityHistory = exports.getAdminStats = exports.updateUserStatus = exports.inviteOfficial = exports.getAllUsers = exports.getAllFarmers = exports.getMessagingContact = exports.getPublicFarmerProfile = exports.updateUserProfile = exports.updateAlertPreferences = exports.getAlertPreferences = exports.getUserProfile = exports.updateOnboardingStatus = void 0;
 const database_1 = require("../database/database");
 const emailService_1 = require("../services/emailService");
 const socket_1 = require("../socket");
 const reviewService_1 = require("../services/reviewService");
 const systemLogService_1 = require("../services/systemLogService");
+const notificationService_1 = require("../services/notificationService");
 const tableColumnsCache = new Map();
 const invalidateTableColumns = (tableName) => {
     tableColumnsCache.delete(tableName);
@@ -41,6 +42,22 @@ const ensureFarmImageColumn = async () => {
         invalidateTableColumns('farms_table');
         const refreshedColumns = await getTableColumns('farms_table');
         return refreshedColumns.has('farm_image');
+    }
+    catch {
+        return false;
+    }
+};
+const ensureProfileImageColumn = async () => {
+    const userColumns = await getTableColumns('users_table');
+    if (userColumns.size === 0)
+        return false;
+    if (userColumns.has('profile_image'))
+        return true;
+    try {
+        await database_1.db.execute('ALTER TABLE users_table ADD COLUMN IF NOT EXISTS profile_image VARCHAR(255) NULL');
+        invalidateTableColumns('users_table');
+        const refreshedColumns = await getTableColumns('users_table');
+        return refreshedColumns.has('profile_image');
     }
     catch {
         return false;
@@ -104,6 +121,20 @@ const ensureAuthorizedUserAccess = (req, userId) => {
         return { allowed: true };
     }
     return { allowed: false };
+};
+const asBinaryFlag = (value, fallback = 1) => {
+    if (value === undefined || value === null || value === '')
+        return fallback === 1 ? 1 : 0;
+    if (typeof value === 'boolean')
+        return value ? 1 : 0;
+    if (typeof value === 'number')
+        return value === 1 ? 1 : 0;
+    const lowered = String(value).trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on'].includes(lowered))
+        return 1;
+    if (['0', 'false', 'no', 'off'].includes(lowered))
+        return 0;
+    return fallback === 1 ? 1 : 0;
 };
 const ensureBadgeTable = async () => {
     await database_1.db.execute(`
@@ -243,6 +274,7 @@ const getUserProfile = async (req, res) => {
         if (!ensureAuthorizedUserAccess(req, userIdParam).allowed) {
             return res.status(403).json({ message: 'You are not allowed to view this user.' });
         }
+        await notificationService_1.notificationService.ensureNotificationPreferenceColumns();
         const includeFarmImage = await ensureFarmImageColumn();
         const includeBio = await hasColumn('users_table', 'bio');
         const includeRole = await hasColumn('users_table', 'role');
@@ -304,11 +336,69 @@ const getUserProfile = async (req, res) => {
     }
 };
 exports.getUserProfile = getUserProfile;
+const getAlertPreferences = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const userIdParam = Array.isArray(userId) ? userId[0] : userId;
+        if (!userIdParam) {
+            return res.status(400).json({ message: 'User ID is required' });
+        }
+        if (!ensureAuthorizedUserAccess(req, userIdParam).allowed) {
+            return res.status(403).json({ message: 'You are not allowed to view this user.' });
+        }
+        await notificationService_1.notificationService.ensureNotificationPreferenceColumns();
+        const [rows] = await database_1.db.execute(`SELECT COALESCE(notify_orders, 1) AS notify_orders, COALESCE(notify_messages, 1) AS notify_messages
+       FROM users_table
+       WHERE id = ?
+       LIMIT 1`, [userIdParam]);
+        const row = rows?.[0];
+        return res.status(200).json({
+            orders: Number(row?.notify_orders ?? 1) === 1,
+            messages: Number(row?.notify_messages ?? 1) === 1,
+        });
+    }
+    catch (err) {
+        console.error(err);
+        return res.status(500).json({ message: 'Error fetching alert preferences' });
+    }
+};
+exports.getAlertPreferences = getAlertPreferences;
+const updateAlertPreferences = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const userIdParam = Array.isArray(userId) ? userId[0] : userId;
+        if (!userIdParam) {
+            return res.status(400).json({ message: 'User ID is required' });
+        }
+        if (!ensureAuthorizedUserAccess(req, userIdParam).allowed) {
+            return res.status(403).json({ message: 'You are not allowed to update this user.' });
+        }
+        const orders = asBinaryFlag(req.body?.orders, 1);
+        const messages = asBinaryFlag(req.body?.messages, 1);
+        await notificationService_1.notificationService.ensureNotificationPreferenceColumns();
+        await database_1.db.execute(`UPDATE users_table
+       SET notify_orders = ?, notify_messages = ?
+       WHERE id = ?`, [orders, messages, userIdParam]);
+        return res.status(200).json({
+            message: 'Alert preferences updated.',
+            preferences: {
+                orders: orders === 1,
+                messages: messages === 1,
+            },
+        });
+    }
+    catch (err) {
+        console.error(err);
+        return res.status(500).json({ message: 'Error updating alert preferences' });
+    }
+};
+exports.updateAlertPreferences = updateAlertPreferences;
 const updateUserProfile = async (req, res) => {
     try {
         const { userId } = req.params;
         const userIdParam = Array.isArray(userId) ? userId[0] : userId;
         const { first_name, last_name, phone, address, city, province, zip_code, latitude, longitude, farm_name, farm_address, farm_city, farm_province, farm_zip_code, farm_latitude, farm_longitude, farm_address_same_as_home } = req.body;
+        await ensureProfileImageColumn();
         const userColumns = await getTableColumns('users_table');
         await ensureFarmImageColumn();
         const farmColumnsInDb = await getTableColumns('farms_table');
@@ -380,10 +470,18 @@ const updateUserProfile = async (req, res) => {
         if (req.body.bio !== undefined)
             userUpdates.push({ column: 'bio', value: asNullable(req.body.bio) });
         if (profileImagePath) {
-            // Persist profile photo in users_table.profile_image as the canonical field.
-            userUpdates.push({ column: 'profile_image', value: profileImagePath });
+            // Persist profile photo in canonical column when available, fallback to legacy schema.
+            if (userColumns.has('profile_image')) {
+                userUpdates.push({ column: 'profile_image', value: profileImagePath });
+            }
+            else if (userColumns.has('image_path')) {
+                userUpdates.push({ column: 'image_path', value: profileImagePath });
+            }
         }
         const filteredUserUpdates = userUpdates.filter(({ column }) => userColumns.has(column));
+        const persistedProfileImage = profileImagePath && (userColumns.has('profile_image') || userColumns.has('image_path'))
+            ? profileImagePath
+            : undefined;
         if (filteredUserUpdates.length > 0) {
             await database_1.db.execute(`UPDATE users_table 
          SET ${filteredUserUpdates.map((u) => `${u.column} = ?`).join(', ')}
@@ -508,8 +606,8 @@ const updateUserProfile = async (req, res) => {
                 last_name: safeLastName,
                 updated_at: Date.now(),
             };
-            if (profileImagePath) {
-                realtimePayload.profile_image = profileImagePath;
+            if (persistedProfileImage) {
+                realtimePayload.profile_image = persistedProfileImage;
             }
             (0, socket_1.emitToAll)('profile_updated', realtimePayload);
         }
@@ -535,7 +633,7 @@ const updateUserProfile = async (req, res) => {
         return res.status(200).json({
             message: 'Normalized profile updated successfully',
             ...(farmImagePath ? { farm_image: farmImagePath } : {}),
-            ...(profileImagePath ? { profile_image: profileImagePath } : {}),
+            ...(persistedProfileImage ? { profile_image: persistedProfileImage } : {}),
             farm_gallery_images: updatedGallery,
             badges: updatedBadges,
         });

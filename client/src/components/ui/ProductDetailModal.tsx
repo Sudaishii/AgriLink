@@ -45,16 +45,17 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const description = product.p_description || product.description || 'No description added yet.';
   const seller = product.first_name
     ? `${product.first_name} ${product.last_name || ''}`.trim()
-    : product.seller || 'Verified Farmer';
+    : product.seller || 'Farmer';
   const image = product.p_image || product.image;
   const ownerId = product.u_id || product.user_id || product.sellerUserId;
+  const sellerIsVerified = Boolean(product.isVerified ?? product.is_verified);
 
   const currentUserId = localStorage.getItem('agrilink_id');
   const isOwner = Boolean(currentUserId && ownerId && String(currentUserId) === String(ownerId));
   const imageUrl = getFullImageUrl(image);
   const isLowStock = getLowStockMeta(product).isLowStock;
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     const productObj = {
       id,
       name,
@@ -67,7 +68,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       location: product.location || 'Local Farm',
     };
 
-    const result = cartService.addToCart(productObj as any, qty);
+    const result = await cartService.addToCart(productObj as any, qty);
     if (result.success) {
       if (result.message) {
         info(result.message);
@@ -130,8 +131,12 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 <span className="text-[11px] font-semibold text-slate-500">ID #{String(id || '').padStart(5, '0')}</span>
-                <span className="w-1 h-1 rounded-full bg-slate-300" />
-                <span className="text-[11px] font-semibold text-emerald-700">Verified Listing</span>
+                {sellerIsVerified && (
+                  <>
+                    <span className="w-1 h-1 rounded-full bg-slate-300" />
+                    <span className="text-[11px] font-semibold text-emerald-700">Verified Farmer</span>
+                  </>
+                )}
               </div>
               <h2 className="text-2xl font-black text-slate-900 leading-tight">{name}</h2>
               <div className="mt-3 inline-flex items-center gap-1 text-amber-500">

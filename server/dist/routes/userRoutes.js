@@ -13,6 +13,8 @@ exports.userRoutes = express_1.default.Router();
 exports.userRoutes.get('/farmers/all', userController_1.getAllFarmers);
 exports.userRoutes.get('/public/:userId', userController_1.getPublicFarmerProfile);
 exports.userRoutes.get('/contact/:userId', authMiddleware_1.authenticateToken, userController_1.getMessagingContact);
+exports.userRoutes.get('/:userId/alerts', authMiddleware_1.authenticateToken, userController_1.getAlertPreferences);
+exports.userRoutes.put('/:userId/alerts', authMiddleware_1.authenticateToken, userController_1.updateAlertPreferences);
 exports.userRoutes.put('/:userId/onboarding', authMiddleware_1.authenticateToken, userController_1.updateOnboardingStatus);
 exports.userRoutes.put('/:userId/profile', authMiddleware_1.authenticateToken, uploadMiddleware_1.upload.fields([
     { name: 'farm_image', maxCount: 1 },

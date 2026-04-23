@@ -102,7 +102,13 @@ const FarmerListingsPageV2: React.FC = () => {
       setProductToDelete(null);
       fetchProducts();
     } catch (err: any) {
-      showError(err.message || 'Deletion failed.');
+      const rawMessage = String(err?.message || 'Deletion failed.');
+      const normalized = rawMessage.toLowerCase();
+      if (normalized.includes('active or reserved orders') || normalized.includes('active orders')) {
+        showError('Cannot delete listing while it has active orders. Please fulfill or cancel orders first.');
+        return;
+      }
+      showError(rawMessage);
     }
   };
 

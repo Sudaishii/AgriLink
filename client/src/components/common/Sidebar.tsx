@@ -25,6 +25,7 @@ import LogoutConfirmationModal from '../ui/LogoutConfirmationModal';
 import { getFullImageUrl } from '../../api/apiConfig';
 import { useMessaging } from '../../contexts/MessagingContext';
 import { useNotifications } from '../../contexts/NotificationContext';
+import { getCartCount, syncCartFromServer } from '../../services/cartService';
 
 // ─── Nav config ─────────────────────────────────────────────────────────────
 
@@ -89,23 +90,25 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, firstName, lastName, profil
   if (isBrgy) navItems = brgyNav;
 
   useEffect(() => {
-    const updateCartCount = () => {
+    const updateCartCount = async () => {
       try {
-        const raw = localStorage.getItem('agrilink_cart');
-        if (!raw) {
+        const hasSession =
+          localStorage.getItem('agrilink_isLoggedIn') === 'true' ||
+          Boolean(localStorage.getItem('agrilink_token'));
+        if (!hasSession) {
           setCartCount(0);
           return;
         }
-        const items = JSON.parse(raw) as Array<{ quantity?: number }>;
-        const count = items.reduce((acc, item) => acc + (Number(item.quantity) || 1), 0);
-        setCartCount(count);
+        await syncCartFromServer();
+        setCartCount(getCartCount());
       } catch {
         setCartCount(0);
       }
     };
-    updateCartCount();
-    window.addEventListener('cart-updated', updateCartCount);
-    return () => window.removeEventListener('cart-updated', updateCartCount);
+    void updateCartCount();
+    const onCartUpdated = () => void updateCartCount();
+    window.addEventListener('cart-updated', onCartUpdated);
+    return () => window.removeEventListener('cart-updated', onCartUpdated);
   }, []);
 
   // ─── Badge Counts ────────────────────────────────────────────────────────

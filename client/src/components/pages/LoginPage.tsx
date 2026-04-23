@@ -34,13 +34,17 @@ export const LoginPage: React.FC<LoginPageProps & { isLoggedIn?: boolean, userTy
 
     const newErrors: Partial<LoginFormData> = {};
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const normalizedIdentifier = formData.email.trim().toLowerCase();
+    const isAdminLoginKey = normalizedIdentifier === 'agrilink';
     if (!formData.email) {
       newErrors.email = 'Email is required' as any;
-    } else if (formData.email !== 'AgriLink' && !emailRegex.test(formData.email)) {
+    } else if (!isAdminLoginKey && !emailRegex.test(formData.email.trim())) {
       newErrors.email = 'Please enter a valid email address' as any;
     }
 
-    if (!formData.password) newErrors.password = 'Password is required' as any;
+    if (!formData.password) {
+      newErrors.password = 'Password is required' as any;
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -168,7 +172,8 @@ export const LoginPage: React.FC<LoginPageProps & { isLoggedIn?: boolean, userTy
                       }
 
                       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                      if (emailValue && emailValue !== 'admin' && !emailRegex.test(emailValue)) {
+                      const isAdminLoginKey = emailValue.trim().toLowerCase() === 'agrilink';
+                      if (emailValue && !isAdminLoginKey && !emailRegex.test(emailValue.trim())) {
                         setErrors(prev => ({ ...prev, email: 'Please enter a valid email address' } as any));
                       }
                     }}

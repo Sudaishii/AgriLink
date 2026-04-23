@@ -86,8 +86,8 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ userType = 'buyer
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
               className={`flex items-center gap-2 px-1 py-4 text-xs font-black uppercase tracking-widest transition-all relative ${activeTab === tab.id
-                  ? 'text-gray-900'
-                  : 'text-gray-400 hover:text-gray-600'
+                ? 'text-gray-900'
+                : 'text-gray-400 hover:text-gray-600'
                 }`}
             >
               <tab.icon size={14} />
@@ -155,7 +155,7 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ userType = 'buyer
               <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center text-gray-100 mx-auto mb-6 border border-gray-100 shadow-sm">
                 <Inbox size={32} />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Clean Slate</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">No Notifications</h3>
               <p className="text-sm text-gray-400 font-medium">You've successfully addressed all pending community alerts.</p>
             </div>
           )}
